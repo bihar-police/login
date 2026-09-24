@@ -101,6 +101,16 @@ export const DailyReportMessages: React.FC<DailyReportMessagesProps> = ({
     [effectiveUserAccounts]
   );
 
+  const distinctStations = useMemo(() => {
+    const set = new Set<string>();
+    effectiveUserAccounts.forEach((u) => {
+      if (u.policeStation && u.policeStation !== 'District HQ' && u.policeStation !== 'Subdivision HQ') {
+        set.add(u.policeStation);
+      }
+    });
+    return ['ALL', 'HQ', ...Array.from(set)];
+  }, [effectiveUserAccounts]);
+
   // Filter registered users for search/selection
   const filteredUsers = useMemo(() => {
     return effectiveUserAccounts.filter((u) => {
@@ -435,7 +445,7 @@ export const DailyReportMessages: React.FC<DailyReportMessagesProps> = ({
 
                   {/* PS Filter Pills */}
                   <div className="flex flex-wrap items-center gap-1 text-[10px]">
-                    {(['ALL', 'Tarapur', 'Asarganj', 'Sangrampur', 'Harpur', 'HQ'] as const).map((st) => (
+                    {distinctStations.map((st) => (
                       <button
                         key={st}
                         type="button"
