@@ -12,6 +12,7 @@ import {
   CaseStatus,
   ReviewFilterValue,
 } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import {
   getDynamicCrimeHeadsConfig,
   doesCaseMatchCrimeHead as matchCaseCrimeHead,
@@ -516,8 +517,10 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
   // Police Station and IO Options
   // -------------------------------------------------------------------------
   const psOptions = useMemo(() => {
-    const list = availablePoliceStations.map((p) => p.name);
-    const set = new Set(list.length > 0 ? list : ['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur']);
+    const list = availablePoliceStations && availablePoliceStations.length > 0
+      ? availablePoliceStations.map((p) => p.name)
+      : INITIAL_POLICE_STATIONS.map((p) => p.name);
+    const set = new Set(list);
     return Array.from(set).map((ps) => ({
       value: ps,
       label: `${ps} PS`,
