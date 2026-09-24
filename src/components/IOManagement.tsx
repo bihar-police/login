@@ -38,6 +38,7 @@ import {
   Edit2,
   ChevronDown,
   ChevronUp,
+  Building2,
   Check,
   Table,
   LayoutGrid,
