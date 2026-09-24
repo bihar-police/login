@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { FIRCase, PoliceStationName, CaseStatus, UserRole, PoliceStation, CaseDesignation, PunishmentTerm, CCTNSSyncOption } from '../types';
+import { FIRCase, PoliceStationName, CaseStatus, UserRole, PoliceStation, CaseDesignation, PunishmentTerm, CCTNSSyncOption, PoliceDistrict, PoliceSubdivision, UserAccount } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { formatReadableDate, getDeadlineInfo, matchesCaseFullDatabaseSearch, isCaseChargesheetedOrFinalForm } from '../utils/helpers';
+import { matchesJurisdictionFilter } from '../utils/jurisdictionHelpers';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
 import {
   ShieldCheck,
@@ -81,6 +83,9 @@ interface SupervisionStatusSectionProps {
   currentRole: UserRole;
   isReadOnly?: boolean;
   availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
+  currentUserAccount?: UserAccount | null;
 }
 
 export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> = ({
@@ -93,6 +98,9 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
   currentRole,
   isReadOnly = false,
   availablePoliceStations,
+  districts,
+  subdivisions,
+  currentUserAccount,
 }) => {
   const psOptions =
     availablePoliceStations && availablePoliceStations.length > 0
@@ -100,6 +108,10 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
       : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
 
   const isCircleInspector = currentRole === 'CI';
+
+  // Jurisdiction Filter State
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('ALL');
+  const [selectedSubdivision, setSelectedSubdivision] = useState<string>('ALL');
 
   // For SDPO / SP / District Admin, supervise SR cases. For Circle Inspector (CI), supervise NON-SR cases!
   const baseTargetCases = useMemo(() => {
@@ -219,6 +231,8 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
 
   // Reset Filters
   const handleReset = () => {
+    setSelectedDistrict('ALL');
+    setSelectedSubdivision('ALL');
     setPsFilter('ALL');
     setDesignationFilter('ALL');
     setDeadlineLimitFilter('ALL');
@@ -254,8 +268,10 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
     const baseCases = searchQuery.trim() ? cases : baseTargetCases;
 
     return baseCases.filter((c) => {
-      // PS Filter
-      if (psFilter !== 'ALL' && c.ps !== psFilter) return false;
+      // Jurisdiction Filter (District, Subdivision, PS)
+      if (!matchesJurisdictionFilter(c, selectedDistrict, selectedSubdivision, psFilter, availablePoliceStations)) {
+        return false;
+      }
 
       // Classification / Designation Filter
       if (designationFilter !== 'ALL' && c.designation !== designationFilter) return false;
@@ -362,6 +378,9 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
   }, [
     cases,
     baseTargetCases,
+    selectedDistrict,
+    selectedSubdivision,
+    availablePoliceStations,
     psFilter,
     designationFilter,
     deadlineLimitFilter,
