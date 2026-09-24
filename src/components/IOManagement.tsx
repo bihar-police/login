@@ -11,6 +11,7 @@ import {
   PoliceStation,
   OfficerLeaveQuotaYear,
 } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import {
   UserCheck,
   Plus,
@@ -532,14 +533,10 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   // Options
   const stationOptions = [
     { label: 'Subdivision HQ', value: 'Subdivision HQ' },
-    ...(availablePoliceStations && availablePoliceStations.length > 0
-      ? availablePoliceStations.map((p) => ({ label: `${p.name} PS`, value: p.name }))
-      : [
-          { label: 'Tarapur PS', value: 'Tarapur' },
-          { label: 'Asarganj PS', value: 'Asarganj' },
-          { label: 'Sangrampur PS', value: 'Sangrampur' },
-          { label: 'Harpur PS', value: 'Harpur' },
-        ]),
+    ...((availablePoliceStations && availablePoliceStations.length > 0
+      ? availablePoliceStations
+      : INITIAL_POLICE_STATIONS
+    ).map((p) => ({ label: `${p.name} PS`, value: p.name }))),
   ];
 
   const statusOptions = [
