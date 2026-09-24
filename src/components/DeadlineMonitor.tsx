@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FIRCase, PoliceStationName, PoliceStation } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { getDeadlineInfo, formatReadableDate } from '../utils/helpers';
 import { Clock, ShieldAlert, AlertTriangle, CheckCircle2, User, Building2, Eye, Edit3, FileSpreadsheet, Printer } from 'lucide-react';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
@@ -25,8 +26,8 @@ export const DeadlineMonitor: React.FC<DeadlineMonitorProps> = ({
 
   const psOptions =
     availablePoliceStations && availablePoliceStations.length > 0
-      ? availablePoliceStations.map((p) => p.name)
-      : ['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'];
+      ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
+      : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
 
   // Filter cases
   const filteredCases = cases.filter((c) => {
