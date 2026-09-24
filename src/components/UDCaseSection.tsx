@@ -10,6 +10,7 @@ import {
   PunishmentTerm,
   CCTNSSyncOption,
 } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import {
   formatReadableDate,
   getPSFromRole,
@@ -79,8 +80,8 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
 
   const psOptions =
     availablePoliceStations && availablePoliceStations.length > 0
-      ? availablePoliceStations.map((p) => p.name)
-      : ['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'];
+      ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
+      : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
 
   const [activeSubTab, setActiveSubTab] = useState<'UD' | 'NON_SR'>('NON_SR');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
