@@ -648,6 +648,19 @@ export default function App() {
     return !activePS || item.ps === activePS;
   };
 
+  const isRecordInUserBaseScope = (item: { ps?: string; district?: string; subdivision?: string }) => {
+    if (isAdministrator) return true;
+    if (isDistrictLevel) {
+      const itemDistrict = item.district || getDistrictForPS(item.ps);
+      return itemDistrict.toLowerCase() === userDistrict.toLowerCase();
+    }
+    if (isSubdivisionLevel) {
+      const itemSubdivision = item.subdivision || getSubdivisionForPS(item.ps);
+      return itemSubdivision.toLowerCase() === userSubdivision.toLowerCase();
+    }
+    return !activePS || item.ps === activePS;
+  };
+
   // Permission levels check
   const isViewer = currentUserAccount?.permissionLevel === 'VIEWER';
   const isOperator = currentUserAccount?.permissionLevel === 'OPERATOR';
@@ -1340,6 +1353,14 @@ export default function App() {
               activePS={activePS}
               availablePoliceStations={policeStations}
               filteredCases={visibleCases}
+              districts={districts}
+              subdivisions={subdivisions}
+              currentRole={currentRole}
+              currentUserAccount={currentUserAccount}
+              selectedDistrict={selectedDistrict}
+              selectedSubdivision={selectedSubdivision}
+              onSelectDistrict={setSelectedDistrict}
+              onSelectSubdivision={setSelectedSubdivision}
             />
 
             <FIRTable
@@ -1358,11 +1379,15 @@ export default function App() {
         {/* Tab 3: 60/90 Days Deadline Monitor */}
         {activeTab === 'deadlines' && (
           <DeadlineMonitor
-            cases={cases.filter(isRecordInJurisdictionScope)}
+            cases={cases.filter(isRecordInUserBaseScope)}
             onViewCase={(c) => setViewingCase(c)}
             onEditCase={(c) => setEditingCase(c)}
             isReadOnly={isReadOnly}
             availablePoliceStations={policeStations}
+            districts={districts}
+            subdivisions={subdivisions}
+            currentRole={currentRole}
+            currentUserAccount={currentUserAccount}
           />
         )}
 
@@ -1384,8 +1409,8 @@ export default function App() {
         {/* Tab 5: UD & NON-SR Desk */}
         {activeTab === 'ud_cases' && (
           <UDCaseSection
-            udCases={udCases.filter(isRecordInJurisdictionScope)}
-            nonSrCases={cases.filter(isRecordInJurisdictionScope).filter((c) => c.designation === 'NON_SR')}
+            udCases={udCases.filter(isRecordInUserBaseScope)}
+            nonSrCases={cases.filter(isRecordInUserBaseScope).filter((c) => c.designation === 'NON_SR')}
             currentRole={currentRole}
             onAddUDCase={handleAddUDCase}
             onUpdateUDCase={handleUpdateUDCase}
@@ -1394,13 +1419,16 @@ export default function App() {
             onEditFIR={(c) => setEditingCase(c)}
             isReadOnly={isReadOnly}
             availablePoliceStations={policeStations}
+            districts={districts}
+            subdivisions={subdivisions}
+            currentUserAccount={currentUserAccount}
           />
         )}
 
         {/* Supervision Status Tab (Super User: SP / SDPO / Administrator / CI) */}
         {activeTab === 'supervision' && (currentRole === 'SDPO' || isDistrictLevel || isAdministrator || currentRole === 'CI') && (
           <SupervisionStatusSection
-            cases={cases.filter(isRecordInJurisdictionScope)}
+            cases={cases.filter(isRecordInUserBaseScope)}
             onEditCase={(c) => setEditingCase(c)}
             onViewCase={(c) => setViewingCase(c)}
             onDeleteSupervisionNote={handleDeleteSupervisionNote}
@@ -1409,29 +1437,37 @@ export default function App() {
             currentRole={currentRole}
             isReadOnly={isReadOnly}
             availablePoliceStations={policeStations}
+            districts={districts}
+            subdivisions={subdivisions}
+            currentUserAccount={currentUserAccount}
           />
         )}
 
         {/* Case Review & Reporting Section */}
         {activeTab === 'case_review' && (
           <CaseReviewSection
-            cases={cases.filter(isRecordInJurisdictionScope)}
+            cases={cases.filter(isRecordInUserBaseScope)}
+            ios={ios}
             onEditCase={(c) => setEditingCase(c)}
             onViewCase={(c) => setViewingCase(c)}
             onDeleteCase={handleDeleteFIR}
             onOpenQRCode={handleOpenQRCode}
             currentRole={currentRole}
             isReadOnly={isReadOnly}
+            availablePoliceStations={policeStations}
+            districts={districts}
+            subdivisions={subdivisions}
+            currentUserAccount={currentUserAccount}
           />
         )}
 
         {/* Tab 6: IO List & Allocation */}
         {activeTab === 'ios' && (
           <IOManagement
-            ios={ios.filter(isRecordInJurisdictionScope)}
-            cases={cases.filter(isRecordInJurisdictionScope)}
+            ios={ios.filter(isRecordInUserBaseScope)}
+            cases={cases.filter(isRecordInUserBaseScope)}
             leaveLedger={leaveLedger}
-            dailyReports={dailyReports.filter(isRecordInJurisdictionScope)}
+            dailyReports={dailyReports.filter(isRecordInUserBaseScope)}
             onAddIO={handleAddIO}
             onUpdateIO={handleUpdateIO}
             onDeleteIO={handleDeleteIO}
@@ -1440,6 +1476,9 @@ export default function App() {
             onDeleteLeaveEntry={handleDeleteLeaveEntry}
             currentRole={currentRole}
             availablePoliceStations={policeStations}
+            districts={districts}
+            subdivisions={subdivisions}
+            currentUserAccount={currentUserAccount}
             onSelectIOCasesFilter={(ioName) => {
               setFilters((prev) => ({ ...prev, ioNames: [ioName] }));
               setActiveTab('firs');
