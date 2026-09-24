@@ -12,6 +12,7 @@ import {
   InvestigatingOfficer,
   DailyCrimeReport,
 } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import {
   CRIME_HEADS_CONFIG,
   ALL_CRIME_HEADS,
@@ -210,9 +211,9 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
   // PS Names list for selectors
   const psNamesList: PoliceStationName[] = useMemo(() => {
     if (scopedPoliceStations.length > 0) {
-      return scopedPoliceStations.map((p) => p.name);
+      return Array.from(new Set(scopedPoliceStations.map((p) => p.name)));
     }
-    return ['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'];
+    return Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
   }, [scopedPoliceStations]);
 
   // Set default active tab based on role
