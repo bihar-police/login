@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FilterOptions, PoliceStationName, CaseDesignation, CaseStatus, InvestigatingOfficer, FIRCase, PoliceStation, CrimeHead } from '../types';
+import { FilterOptions, PoliceStationName, CaseDesignation, CaseStatus, InvestigatingOfficer, FIRCase, PoliceStation, CrimeHead, PoliceDistrict, PoliceSubdivision, UserRole, UserAccount } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
-import { Search, RotateCcw, Calendar, Check, ChevronDown, Download, FileSpreadsheet, Printer, FileCheck, X, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
+import { Search, RotateCcw, Calendar, Check, ChevronDown, Download, FileSpreadsheet, Printer, FileCheck, X, CheckCircle2, ShieldAlert, Building2 } from 'lucide-react';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
 import { CRIME_HEADS_CONFIG, ALL_CRIME_HEADS } from '../utils/crimeClassifier';
 
@@ -14,6 +15,14 @@ interface FIRFilterBarProps {
   filteredCases: FIRCase[];
   activePS?: PoliceStationName | null;
   availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
+  currentRole?: UserRole;
+  currentUserAccount?: UserAccount | null;
+  selectedDistrict?: string;
+  selectedSubdivision?: string;
+  onSelectDistrict?: (district: string) => void;
+  onSelectSubdivision?: (subdivision: string) => void;
 }
 
 export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
@@ -25,6 +34,14 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
   filteredCases,
   activePS,
   availablePoliceStations,
+  districts,
+  subdivisions,
+  currentRole = 'ADMINISTRATOR',
+  currentUserAccount = null,
+  selectedDistrict = 'ALL',
+  selectedSubdivision = 'ALL',
+  onSelectDistrict,
+  onSelectSubdivision,
 }) => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -144,6 +161,43 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
   return (
     <div ref={containerRef} className="bg-white dark:bg-slate-900 rounded-xl p-4.5 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-3.5">
       
+      {/* Command Jurisdiction Filter Bar */}
+      <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <div>
+            <span className="font-bold text-slate-900 dark:text-white">
+              FIR Register Command Jurisdiction
+            </span>
+            <p className="text-[10px] text-slate-500">
+              Filter FIR records across District, Subdivision & Police Station
+            </p>
+          </div>
+        </div>
+        <JurisdictionFilterControls
+          currentRole={currentRole}
+          currentUserAccount={currentUserAccount}
+          districts={districts}
+          subdivisions={subdivisions}
+          availablePoliceStations={availablePoliceStations}
+          selectedDistrict={selectedDistrict}
+          selectedSubdivision={selectedSubdivision}
+          selectedPS={policeStations.length === 1 ? policeStations[0] : 'ALL'}
+          onChangeDistrict={(d) => {
+            if (onSelectDistrict) onSelectDistrict(d);
+            handleChange('policeStations', []);
+          }}
+          onChangeSubdivision={(s) => {
+            if (onSelectSubdivision) onSelectSubdivision(s);
+            handleChange('policeStations', []);
+          }}
+          onChangePS={(ps) => {
+            handleChange('policeStations', ps === 'ALL' ? [] : [ps]);
+          }}
+          compact={true}
+        />
+      </div>
+
       {/* Top Search Bar, Export Actions & Reset */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         
