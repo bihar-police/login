@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>SDPO Portal - Redirecting...</title>
+    <script type="text/javascript">
+      // Safely redirect to the repository base on GitHub Pages or custom domain
+      var segments = window.location.pathname.split('/').filter(Boolean);
+      // If deployed on github.io with a sub-path, segments[0] is the repository name
+      var isGitHubPages = window.location.hostname.endsWith('github.io');
+      var targetPath = isGitHubPages && segments.length > 0 ? '/' + segments[0] + '/' : '/';
+      window.location.replace(window.location.origin + targetPath);
+    </script>
+  </head>
+  <body style="font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 50px 20px; color: #1e293b; background-color: #f8fafc;">
+    <h2 style="font-size: 20px; font-weight: 700;">Subdivisional Police Office Tarapur Portal</h2>
+    <p style="color: #64748b; font-size: 14px; margin-top: 8px;">Redirecting to the portal homepage...</p>
+    <p style="margin-top: 16px;"><a href="./" style="color: #2563eb; text-decoration: underline; font-weight: 600;">Click here if not redirected automatically</a></p>
+  </body>
+</html>
