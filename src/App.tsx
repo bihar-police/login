@@ -590,13 +590,26 @@ export default function App() {
 
   const getSubdivisionForPS = (psName?: string): string => {
     if (!psName) return 'Tarapur';
-    const found = policeStations.find((p) => p.name.toLowerCase() === psName.toLowerCase());
+    const found = (policeStations && policeStations.length > 0 ? policeStations : INITIAL_POLICE_STATIONS).find(
+      (p) => p.name.toLowerCase() === psName.toLowerCase()
+    );
     if (found?.subdivisionName) return found.subdivisionName;
     const lower = psName.toLowerCase();
     if (['tarapur', 'asarganj', 'sangrampur', 'harpur'].includes(lower)) return 'Tarapur';
-    if (['munger kotwali', 'kasim bazar', 'purabsarai', 'mufassil', 'nayaramnagar'].includes(lower)) return 'Munger Sadar';
-    if (['kharagpur', 'shamshabad', 'tetiyabambar'].includes(lower)) return 'Kharagpur';
+    if (['munger kotwali', 'kotwali', 'kasim bazar', 'purabsarai', 'mufassil', 'muffasil', 'nayaramnagar', 'safiasarai'].includes(lower)) return 'Munger Sadar';
+    if (['kharagpur', 'shamshabad', 'tetiyabambar', 'gangta'].includes(lower)) return 'Kharagpur';
+    if (['bhagalpur sadar', 'kotwali bhagalpur', 'ishakchak', 'babarganj'].includes(lower)) return 'Bhagalpur Sadar';
+    if (['kahalgaon', 'sanokhar'].includes(lower)) return 'Kahalgaon';
     return 'Tarapur';
+  };
+
+  const getDistrictForPS = (psName?: string): string => {
+    if (!psName) return 'Munger';
+    const found = (policeStations && policeStations.length > 0 ? policeStations : INITIAL_POLICE_STATIONS).find(
+      (p) => p.name.toLowerCase() === psName.toLowerCase()
+    );
+    if (found?.districtName) return found.districtName;
+    return 'Munger';
   };
 
   const isRecordInJurisdictionScope = (item: { ps?: string; district?: string; subdivision?: string }) => {
@@ -650,11 +663,17 @@ export default function App() {
       return;
     }
     const todayStr = new Date().toISOString().split('T')[0];
-    const targetSubdivision = getSubdivisionForPS(newCaseData.ps);
+    const targetSubdivision = newCaseData.subdivision && newCaseData.subdivision !== 'ALL'
+      ? newCaseData.subdivision
+      : getSubdivisionForPS(newCaseData.ps);
+    const targetDistrict = newCaseData.district && newCaseData.district !== 'ALL'
+      ? newCaseData.district
+      : (currentUserAccount?.district && currentUserAccount.district !== 'ALL' ? currentUserAccount.district : getDistrictForPS(newCaseData.ps));
+
     const newCase: FIRCase = {
       ...newCaseData,
       id: `fir-${Date.now()}`,
-      district: currentUserAccount?.district || 'Munger',
+      district: targetDistrict,
       subdivision: targetSubdivision,
       createdAt: todayStr,
       updatedAt: todayStr,
@@ -1317,8 +1336,9 @@ export default function App() {
               onFilterChange={setFilters}
               onResetFilters={() => setFilters(DEFAULT_FILTERS)}
               investigatingOfficers={ios}
-              hidePSFilter={!isDistrictLevel && currentRole !== 'SDPO'}
+              hidePSFilter={!isAdministrator && !isDistrictLevel && currentRole !== 'SDPO'}
               activePS={activePS}
+              availablePoliceStations={policeStations}
               filteredCases={visibleCases}
             />
 
@@ -1342,6 +1362,7 @@ export default function App() {
             onViewCase={(c) => setViewingCase(c)}
             onEditCase={(c) => setEditingCase(c)}
             isReadOnly={isReadOnly}
+            availablePoliceStations={policeStations}
           />
         )}
 
@@ -1356,6 +1377,7 @@ export default function App() {
             isNewModalOpen={isNewLandDisputeModalOpen}
             setIsNewModalOpen={setIsNewLandDisputeModalOpen}
             isReadOnly={isReadOnly}
+            availablePoliceStations={policeStations}
           />
         )}
 
@@ -1371,6 +1393,7 @@ export default function App() {
             onViewFIR={(c) => setViewingCase(c)}
             onEditFIR={(c) => setEditingCase(c)}
             isReadOnly={isReadOnly}
+            availablePoliceStations={policeStations}
           />
         )}
 
@@ -1385,6 +1408,7 @@ export default function App() {
             onOpenQRCode={handleOpenQRCode}
             currentRole={currentRole}
             isReadOnly={isReadOnly}
+            availablePoliceStations={policeStations}
           />
         )}
 
@@ -1415,6 +1439,7 @@ export default function App() {
             onAddLeaveEntry={handleAddLeaveEntry}
             onDeleteLeaveEntry={handleDeleteLeaveEntry}
             currentRole={currentRole}
+            availablePoliceStations={policeStations}
             onSelectIOCasesFilter={(ioName) => {
               setFilters((prev) => ({ ...prev, ioNames: [ioName] }));
               setActiveTab('firs');
@@ -1446,6 +1471,7 @@ export default function App() {
             onUpdateLeaveStatus={handleUpdateLeaveStatus}
             onAddLeaveEntry={handleAddLeaveEntry}
             onDeleteLeaveEntry={handleDeleteLeaveEntry}
+            availablePoliceStations={policeStations}
           />
         )}
 
@@ -1487,7 +1513,12 @@ export default function App() {
         onClose={() => setIsNewFIRModalOpen(false)}
         onSubmit={handleCreateFIR}
         currentRole={currentRole}
+        currentUserAccount={currentUserAccount}
         investigatingOfficers={ios}
+        districts={districts}
+        subdivisions={subdivisions}
+        policeStations={policeStations}
+        availablePoliceStations={policeStations}
       />
 
       <EditFIRModal
@@ -1498,7 +1529,12 @@ export default function App() {
         onDeleteSupervisionNote={handleDeleteSupervisionNote}
         onDeleteCase={handleDeleteFIR}
         currentRole={currentRole}
+        currentUserAccount={currentUserAccount}
         investigatingOfficers={ios}
+        districts={districts}
+        subdivisions={subdivisions}
+        policeStations={policeStations}
+        availablePoliceStations={policeStations}
         isSupervisionMode={activeTab === 'supervision'}
         isReadOnly={isReadOnly}
       />
