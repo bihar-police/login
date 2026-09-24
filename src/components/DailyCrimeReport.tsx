@@ -92,7 +92,7 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
   subdivisions,
 }) => {
   const activePS = getPSFromRole(currentRole);
-  const isSuperUser = currentRole === 'SDPO';
+  const isSuperUser = currentRole === 'SDPO' || currentRole === 'SP' || currentRole === 'ADMINISTRATOR' || currentRole === 'DISTRICT_ADMIN';
 
   // Sub-tab inside Daily Reports: Dashboard, Diary Log, Historical Register, or Messages
   const [subTab, setSubTab] = useState<'dashboard' | 'logs' | 'register' | 'messages'>('dashboard');
@@ -540,6 +540,10 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
         defaultPS={activePS}
         isSuperUser={isSuperUser}
         availablePoliceStations={availablePoliceStations}
+        districts={districts}
+        subdivisions={subdivisions}
+        currentRole={currentRole}
+        currentUserAccount={currentUserAccount}
       />
 
       {/* Modal 2: View Report Full Breakdown */}
