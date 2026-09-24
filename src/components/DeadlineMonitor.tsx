@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { FIRCase, PoliceStationName, PoliceStation } from '../types';
+import { FIRCase, PoliceStationName, PoliceStation, PoliceDistrict, PoliceSubdivision, UserRole, UserAccount } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { getDeadlineInfo, formatReadableDate } from '../utils/helpers';
+import { matchesJurisdictionFilter } from '../utils/jurisdictionHelpers';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
 import { Clock, ShieldAlert, AlertTriangle, CheckCircle2, User, Building2, Eye, Edit3, FileSpreadsheet, Printer } from 'lucide-react';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
 
@@ -11,6 +13,10 @@ interface DeadlineMonitorProps {
   onEditCase: (caseItem: FIRCase) => void;
   isReadOnly?: boolean;
   availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
+  currentRole?: UserRole;
+  currentUserAccount?: UserAccount | null;
 }
 
 export const DeadlineMonitor: React.FC<DeadlineMonitorProps> = ({
@@ -19,7 +25,13 @@ export const DeadlineMonitor: React.FC<DeadlineMonitorProps> = ({
   onEditCase,
   isReadOnly = false,
   availablePoliceStations,
+  districts,
+  subdivisions,
+  currentRole = 'ADMINISTRATOR',
+  currentUserAccount = null,
 }) => {
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('ALL');
+  const [selectedSubdivision, setSelectedSubdivision] = useState<string>('ALL');
   const [limitFilter, setLimitFilter] = useState<'ALL' | '60' | '90'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OVERDUE' | 'APPROACHING' | 'ON_TRACK' | 'COMPLETED'>('ALL');
   const [psFilter, setPsFilter] = useState<'ALL' | PoliceStationName>('ALL');
@@ -29,8 +41,11 @@ export const DeadlineMonitor: React.FC<DeadlineMonitorProps> = ({
       ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
       : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
 
-  // Filter cases
+  // Filter cases with jurisdiction
   const filteredCases = cases.filter((c) => {
+    if (!matchesJurisdictionFilter(c, selectedDistrict, selectedSubdivision, psFilter, availablePoliceStations)) {
+      return false;
+    }
     if (limitFilter !== 'ALL' && c.deadlineDays.toString() !== limitFilter) return false;
     if (psFilter !== 'ALL' && c.ps !== psFilter) return false;
 
@@ -184,6 +199,34 @@ export const DeadlineMonitor: React.FC<DeadlineMonitorProps> = ({
           <p className="text-[11px] text-slate-500 mt-1">Court chargesheeted / Closed</p>
         </div>
 
+      </div>
+
+      {/* Jurisdiction Hierarchy Bar */}
+      <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <div>
+            <span className="font-bold text-slate-900 dark:text-white">
+              Deadline Command Jurisdiction
+            </span>
+            <p className="text-[10px] text-slate-500">
+              Filter investigation deadlines across District, Subdivision & Police Stations
+            </p>
+          </div>
+        </div>
+        <JurisdictionFilterControls
+          currentRole={currentRole}
+          currentUserAccount={currentUserAccount}
+          districts={districts}
+          subdivisions={subdivisions}
+          availablePoliceStations={availablePoliceStations}
+          selectedDistrict={selectedDistrict}
+          selectedSubdivision={selectedSubdivision}
+          selectedPS={psFilter}
+          onChangeDistrict={setSelectedDistrict}
+          onChangeSubdivision={setSelectedSubdivision}
+          onChangePS={(ps) => setPsFilter(ps as any)}
+        />
       </div>
 
       {/* Filter Tabs & Bar */}
