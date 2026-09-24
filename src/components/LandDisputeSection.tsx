@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LandDispute, PoliceStationName, UserRole, PoliceStation } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { formatReadableDate, getPSFromRole } from '../utils/helpers';
 import { Scale, Plus, Search, RotateCcw, CheckCircle2, AlertCircle, Calendar, MapPin, Check, X, FileSpreadsheet, Printer, Trash2 } from 'lucide-react';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
@@ -31,8 +32,8 @@ export const LandDisputeSection: React.FC<LandDisputeSectionProps> = ({
 
   const psOptions =
     availablePoliceStations && availablePoliceStations.length > 0
-      ? availablePoliceStations.map((p) => p.name)
-      : ['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'];
+      ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
+      : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
 
   const todayStr = new Date().toISOString().split('T')[0];
 
