@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FilterOptions, PoliceStationName, CaseDesignation, CaseStatus, InvestigatingOfficer, FIRCase, PoliceStation, CrimeHead } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { Search, RotateCcw, Calendar, Check, ChevronDown, Download, FileSpreadsheet, Printer, FileCheck, X, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
 import { CRIME_HEADS_CONFIG, ALL_CRIME_HEADS } from '../utils/crimeClassifier';
@@ -63,8 +64,8 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
 
   const allPSOptions: PoliceStationName[] =
     availablePoliceStations && availablePoliceStations.length > 0
-      ? (availablePoliceStations.map((p) => p.name) as PoliceStationName[])
-      : (['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'] as PoliceStationName[]);
+      ? (Array.from(new Set(availablePoliceStations.map((p) => p.name))) as PoliceStationName[])
+      : (Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name))) as PoliceStationName[]);
   const allDesignationOptions: { label: string; value: CaseDesignation }[] = [
     { label: 'SR Cases (SDPO)', value: 'SR' },
     { label: 'NON-SR Cases (CI)', value: 'NON_SR' },
