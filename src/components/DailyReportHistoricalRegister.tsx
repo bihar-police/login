@@ -5,8 +5,19 @@ import {
   PoliceStationName,
   UserRole,
   PoliceStation,
+  PoliceDistrict,
+  PoliceSubdivision,
+  UserAccount,
 } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
+import {
+  getUserJurisdictionContext,
+  getEffectiveDistricts,
+  getSubdivisionsForDistrict,
+  getPoliceStationsForJurisdiction,
+  matchesJurisdictionFilter,
+} from '../utils/jurisdictionHelpers';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
 import {
   formatReadableDate,
   formatIndianDate,
@@ -51,25 +62,51 @@ interface DailyReportHistoricalRegisterProps {
   reports: DailyCrimeReport[];
   investigatingOfficers: InvestigatingOfficer[];
   currentRole: UserRole;
+  currentUserAccount?: UserAccount | null;
   activePS?: PoliceStationName | null;
   onViewReport: (report: DailyCrimeReport) => void;
   onSelectIOForProfile?: (ioName: string) => void;
   availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
 }
 
 export const DailyReportHistoricalRegister: React.FC<DailyReportHistoricalRegisterProps> = ({
   reports,
   investigatingOfficers,
   currentRole,
+  currentUserAccount,
   activePS,
   onViewReport,
   onSelectIOForProfile,
   availablePoliceStations,
+  districts,
+  subdivisions,
 }) => {
-  const psOptions: PoliceStationName[] =
-    availablePoliceStations && availablePoliceStations.length > 0
-      ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
-      : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
+  const { isAdministrator, isDistrictLevel, isSubdivisionLevel, userDistrict, userSubdivision } =
+    getUserJurisdictionContext(currentRole, currentUserAccount || null);
+
+  const effectiveDistricts = useMemo(() => getEffectiveDistricts(districts), [districts]);
+
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(isAdministrator ? 'ALL' : userDistrict);
+  const [selectedSubdivision, setSelectedSubdivision] = useState<string>(isSubdivisionLevel ? userSubdivision : 'ALL');
+
+  // Available subdivisions based on active district
+  const availableSubdivisions = useMemo(() => {
+    const activeDist = isAdministrator ? selectedDistrict : userDistrict;
+    return getSubdivisionsForDistrict(activeDist, subdivisions, districts);
+  }, [selectedDistrict, isAdministrator, userDistrict, subdivisions, districts]);
+
+  // Available stations based on active district & subdivision
+  const availableStations = useMemo(() => {
+    const activeDist = isAdministrator ? selectedDistrict : userDistrict;
+    const activeSubdiv = isSubdivisionLevel ? userSubdivision : selectedSubdivision;
+    return getPoliceStationsForJurisdiction(activeDist, activeSubdiv, availablePoliceStations);
+  }, [selectedDistrict, selectedSubdivision, isAdministrator, userDistrict, isSubdivisionLevel, userSubdivision, availablePoliceStations]);
+
+  const psOptions: PoliceStationName[] = useMemo(() => {
+    return Array.from(new Set(availableStations.map((p) => p.name as PoliceStationName)));
+  }, [availableStations]);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -97,9 +134,9 @@ export const DailyReportHistoricalRegister: React.FC<DailyReportHistoricalRegist
     return extractAllDutyRecords(reports);
   }, [reports]);
 
-  // Filtered duty records based on selected date range & parameters
+  // Filtered duty records based on selected date range & parameters & jurisdiction
   const filteredDutyRecords = useMemo(() => {
-    return filterDutyRecords(allDutyRecords, {
+    const baseFiltered = filterDutyRecords(allDutyRecords, {
       startDate,
       endDate,
       policeStation: selectedStation,
@@ -108,7 +145,17 @@ export const DailyReportHistoricalRegister: React.FC<DailyReportHistoricalRegist
       timeCategory: selectedTimeCategory,
       searchQuery,
     });
-  }, [allDutyRecords, startDate, endDate, selectedStation, selectedIoName, selectedDutyType, selectedTimeCategory, searchQuery]);
+
+    return baseFiltered.filter((d) =>
+      matchesJurisdictionFilter(
+        { ps: d.ps },
+        selectedDistrict,
+        selectedSubdivision,
+        selectedStation,
+        availablePoliceStations
+      )
+    );
+  }, [allDutyRecords, startDate, endDate, selectedStation, selectedIoName, selectedDutyType, selectedTimeCategory, searchQuery, selectedDistrict, selectedSubdivision, availablePoliceStations]);
 
   // Statistics for Duty Register
   const dutyStats = useMemo(() => {
@@ -124,11 +171,16 @@ export const DailyReportHistoricalRegister: React.FC<DailyReportHistoricalRegist
   // Reports matching the Single Date Lookup
   const singleDateReports = useMemo(() => {
     const matched = reports.filter((r) => r.date === selectedSingleDate);
-    if (activePS) {
-      return matched.filter((r) => r.ps === activePS);
-    }
-    return matched;
-  }, [reports, selectedSingleDate, activePS]);
+    return matched.filter((r) =>
+      matchesJurisdictionFilter(
+        r,
+        selectedDistrict,
+        selectedSubdivision,
+        selectedStation,
+        availablePoliceStations
+      )
+    );
+  }, [reports, selectedSingleDate, selectedDistrict, selectedSubdivision, selectedStation, availablePoliceStations]);
 
   // Single date summary stats
   const singleDateStats = useMemo(() => {
@@ -414,6 +466,31 @@ export const DailyReportHistoricalRegister: React.FC<DailyReportHistoricalRegist
                 >
                   Yesterday
                 </button>
+              </div>
+
+              {/* Jurisdiction Hierarchy Selector for Date Lookup */}
+              <div className="border-l border-slate-200 dark:border-slate-700 pl-2">
+                <JurisdictionFilterControls
+                  currentRole={currentRole}
+                  currentUserAccount={currentUserAccount || null}
+                  districts={districts}
+                  subdivisions={subdivisions}
+                  availablePoliceStations={availablePoliceStations}
+                  selectedDistrict={selectedDistrict}
+                  selectedSubdivision={selectedSubdivision}
+                  selectedPS={selectedStation}
+                  onChangeDistrict={(d) => {
+                    setSelectedDistrict(d);
+                    setSelectedSubdivision('ALL');
+                    setSelectedStation('ALL');
+                  }}
+                  onChangeSubdivision={(s) => {
+                    setSelectedSubdivision(s);
+                    setSelectedStation('ALL');
+                  }}
+                  onChangePS={(p) => setSelectedStation(p)}
+                  compact={true}
+                />
               </div>
             </div>
 
@@ -773,27 +850,43 @@ export const DailyReportHistoricalRegister: React.FC<DailyReportHistoricalRegist
               </div>
             </div>
 
-            {/* Row 2: PS, IO, Duty Type, Time Slot, and Search */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
-              
-              {/* 1. Police Station */}
-              <div>
-                <label className="block font-bold text-slate-600 dark:text-slate-400 mb-1">
-                  Police Station:
-                </label>
-                <select
-                  value={selectedStation}
-                  onChange={(e) => setSelectedStation(e.target.value)}
-                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-slate-900 dark:text-white"
-                >
-                  <option value="ALL">All Police Stations ({psOptions.length})</option>
-                  {psOptions.map((st) => (
-                    <option key={st} value={st}>
-                      {st} PS
-                    </option>
-                  ))}
-                </select>
+            {/* Jurisdiction Command Level Filter for Duty Roster */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Jurisdiction Command Hierarchy
+                  </span>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Filter officers and patrol rosters across District, Subdivision & Police Stations
+                  </p>
+                </div>
               </div>
+              <JurisdictionFilterControls
+                currentRole={currentRole}
+                currentUserAccount={currentUserAccount || null}
+                districts={districts}
+                subdivisions={subdivisions}
+                availablePoliceStations={availablePoliceStations}
+                selectedDistrict={selectedDistrict}
+                selectedSubdivision={selectedSubdivision}
+                selectedPS={selectedStation}
+                onChangeDistrict={(d) => {
+                  setSelectedDistrict(d);
+                  setSelectedSubdivision('ALL');
+                  setSelectedStation('ALL');
+                }}
+                onChangeSubdivision={(s) => {
+                  setSelectedSubdivision(s);
+                  setSelectedStation('ALL');
+                }}
+                onChangePS={(p) => setSelectedStation(p)}
+              />
+            </div>
+
+            {/* Row 2: IO, Duty Type, Time Slot, and Search */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
 
               {/* 2. IO Name (Linked with IO Management) */}
               <div>
