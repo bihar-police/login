@@ -98,6 +98,8 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
   const { isAdministrator, isDistrictLevel, isSubdivisionLevel, userDistrict, userSubdivision } =
     getUserJurisdictionContext(currentRole, currentUserAccount || null);
 
+  const isSuperUser = isAdministrator || isDistrictLevel || isSubdivisionLevel;
+
   const effectiveDistricts = useMemo(() => getEffectiveDistricts(districts), [districts]);
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -118,6 +120,7 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
   const [selectedPS, setSelectedPS] = useState<PoliceStationName>(
     activePS || activeStationsList[0] || 'Tarapur'
   );
+  const contextPS = viewLevel === 'ps' ? selectedPS : null;
 
   // Available subdivisions based on active district
   const availableSubdivisions = useMemo(() => {
