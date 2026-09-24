@@ -10,8 +10,13 @@ import {
   OfficerLeaveType,
   PoliceStation,
   OfficerLeaveQuotaYear,
+  PoliceDistrict,
+  PoliceSubdivision,
+  UserAccount,
 } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
+import { matchesJurisdictionFilter } from '../utils/jurisdictionHelpers';
 import {
   UserCheck,
   Plus,
@@ -98,6 +103,9 @@ interface IOManagementProps {
   onViewCase?: (caseItem: FIRCase) => void;
   isReadOnly?: boolean;
   availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
+  currentUserAccount?: UserAccount | null;
 }
 
 export const IOManagement: React.FC<IOManagementProps> = ({
@@ -117,11 +125,19 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   onViewCase,
   isReadOnly = false,
   availablePoliceStations,
+  districts,
+  subdivisions,
+  currentUserAccount,
 }) => {
   const activePS = getPSFromRole(currentRole);
 
   // View Mode: 'roster' (cards) vs 'ledger' (leave ledger table) vs 'duties' (duty register)
   const [viewMode, setViewMode] = useState<'roster' | 'ledger' | 'duties'>('roster');
+
+  // Jurisdiction Hierarchy Multi-Criteria Filters
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('ALL');
+  const [selectedSubdivision, setSelectedSubdivision] = useState<string>('ALL');
+  const [selectedJurisdictionPS, setSelectedJurisdictionPS] = useState<string>('ALL');
 
   // Multi-select filters
   const [selectedStations, setSelectedStations] = useState<string[]>([]);
@@ -210,6 +226,9 @@ export const IOManagement: React.FC<IOManagementProps> = ({
 
   // Reset Filters
   const handleResetFilters = () => {
+    setSelectedDistrict('ALL');
+    setSelectedSubdivision('ALL');
+    setSelectedJurisdictionPS('ALL');
     setSelectedStations([]);
     setSelectedStatuses([]);
     setSelectedRanks([]);
@@ -220,6 +239,9 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   };
 
   const hasActiveFilters =
+    selectedDistrict !== 'ALL' ||
+    selectedSubdivision !== 'ALL' ||
+    selectedJurisdictionPS !== 'ALL' ||
     selectedStations.length > 0 ||
     selectedStatuses.length > 0 ||
     selectedRanks.length > 0 ||
@@ -582,6 +604,19 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   // Filtered IOs calculation
   const filteredIos = useMemo(() => {
     return ios.filter((io) => {
+      // 0. Jurisdiction Hierarchy Filter (District, Subdivision, PS)
+      if (
+        !matchesJurisdictionFilter(
+          io,
+          selectedDistrict,
+          selectedSubdivision,
+          selectedJurisdictionPS,
+          availablePoliceStations
+        )
+      ) {
+        return false;
+      }
+
       const ioStatus = io.status || 'ACTIVE';
       const onLeave = isIoCurrentlyOnLeave(io);
 
@@ -660,6 +695,10 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   }, [
     ios,
     cases,
+    selectedDistrict,
+    selectedSubdivision,
+    selectedJurisdictionPS,
+    availablePoliceStations,
     selectedStations,
     selectedStatuses,
     selectedRanks,
@@ -961,6 +1000,34 @@ export const IOManagement: React.FC<IOManagementProps> = ({
               <span>Clear Filters</span>
             </button>
           )}
+        </div>
+
+        {/* Jurisdiction Hierarchy Command Filters */}
+        <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <div>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Command Jurisdiction
+              </span>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                Hierarchical officer filtering by District, Subdivision & Police Station
+              </p>
+            </div>
+          </div>
+          <JurisdictionFilterControls
+            currentRole={currentRole}
+            currentUserAccount={currentUserAccount || null}
+            districts={districts}
+            subdivisions={subdivisions}
+            availablePoliceStations={availablePoliceStations}
+            selectedDistrict={selectedDistrict}
+            selectedSubdivision={selectedSubdivision}
+            selectedPS={selectedJurisdictionPS}
+            onChangeDistrict={setSelectedDistrict}
+            onChangeSubdivision={setSelectedSubdivision}
+            onChangePS={setSelectedJurisdictionPS}
+          />
         </div>
 
         {/* Dropdowns Row */}
@@ -2166,6 +2233,9 @@ export const IOManagement: React.FC<IOManagementProps> = ({
           currentRole={currentRole}
           activePS={activePS}
           availablePoliceStations={availablePoliceStations}
+          districts={districts}
+          subdivisions={subdivisions}
+          currentUserAccount={currentUserAccount}
           onViewReport={() => {}}
           onSelectIOForProfile={(ioName) => {
             const found = ios.find(
