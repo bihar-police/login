@@ -8,6 +8,9 @@ import {
   DailyCrimeReport,
   UserMessage,
   LeaveLedgerEntry,
+  PoliceDistrict,
+  PoliceSubdivision,
+  PoliceStation,
 } from '../types';
 import { INITIAL_USER_ACCOUNTS } from '../data/mockData';
 
@@ -180,6 +183,9 @@ export async function testAllSupabaseTables(): Promise<{
 
   const tableNames = [
     'user_accounts',
+    'police_districts',
+    'police_subdivisions',
+    'police_stations',
     'fir_cases',
     'investigating_officers',
     'leave_ledger',
@@ -1112,6 +1118,207 @@ export async function saveMonthlyArrestOverrideToSupabase(
   return resilientUpsert('monthly_arrest_adjustments', snakePayload, camelPayload, 'month_key');
 }
 
+// --- POLICE DISTRICTS ---
+export async function fetchPoliceDistrictsFromSupabase(): Promise<PoliceDistrict[] | null> {
+  const client = getSupabase();
+  if (!isSupabaseConfigured() || !client) return null;
+  try {
+    const { data, error } = await client.from('police_districts').select('*').order('name', { ascending: true });
+    if (error) {
+      console.warn('Error fetching police districts from Supabase:', error.message);
+      return null;
+    }
+    return (data || []).map((d: any) => ({
+      id: d.id,
+      name: d.name || '',
+      state: d.state || 'Bihar',
+      hqName: d.hq_name || d.hqName || '',
+      description: d.description || '',
+      createdAt: d.created_at || d.createdAt,
+    })) as PoliceDistrict[];
+  } catch (err) {
+    console.warn('Supabase exception in fetchPoliceDistricts:', err);
+    return null;
+  }
+}
+
+export async function savePoliceDistrictToSupabase(district: PoliceDistrict): Promise<boolean> {
+  const snakePayload = {
+    id: district.id,
+    name: district.name,
+    state: district.state || 'Bihar',
+    hq_name: district.hqName || null,
+    description: district.description || null,
+    created_at: district.createdAt || new Date().toISOString(),
+  };
+
+  const camelPayload = {
+    id: district.id,
+    name: district.name,
+    state: district.state || 'Bihar',
+    hqName: district.hqName || null,
+    description: district.description || null,
+    createdAt: district.createdAt || new Date().toISOString(),
+  };
+
+  return resilientUpsert('police_districts', snakePayload, camelPayload);
+}
+
+export async function deletePoliceDistrictFromSupabase(id: string): Promise<boolean> {
+  const client = getSupabase();
+  if (!isSupabaseConfigured() || !client) return false;
+  try {
+    const { error } = await client.from('police_districts').delete().eq('id', id);
+    if (error) {
+      console.error('Error deleting police district from Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Supabase exception in deletePoliceDistrict:', err);
+    return false;
+  }
+}
+
+// --- POLICE SUBDIVISIONS ---
+export async function fetchPoliceSubdivisionsFromSupabase(): Promise<PoliceSubdivision[] | null> {
+  const client = getSupabase();
+  if (!isSupabaseConfigured() || !client) return null;
+  try {
+    const { data, error } = await client.from('police_subdivisions').select('*').order('name', { ascending: true });
+    if (error) {
+      console.warn('Error fetching police subdivisions from Supabase:', error.message);
+      return null;
+    }
+    return (data || []).map((d: any) => ({
+      id: d.id,
+      districtId: d.district_id || d.districtId || '',
+      districtName: d.district_name || d.districtName || '',
+      name: d.name || '',
+      headquarters: d.headquarters || '',
+      sdpoOfficerName: d.sdpo_officer_name || d.sdpoOfficerName || '',
+      createdAt: d.created_at || d.createdAt,
+    })) as PoliceSubdivision[];
+  } catch (err) {
+    console.warn('Supabase exception in fetchPoliceSubdivisions:', err);
+    return null;
+  }
+}
+
+export async function savePoliceSubdivisionToSupabase(subdivision: PoliceSubdivision): Promise<boolean> {
+  const snakePayload = {
+    id: subdivision.id,
+    district_id: subdivision.districtId,
+    district_name: subdivision.districtName,
+    name: subdivision.name,
+    headquarters: subdivision.headquarters || null,
+    sdpo_officer_name: subdivision.sdpoOfficerName || null,
+    created_at: subdivision.createdAt || new Date().toISOString(),
+  };
+
+  const camelPayload = {
+    id: subdivision.id,
+    districtId: subdivision.districtId,
+    districtName: subdivision.districtName,
+    name: subdivision.name,
+    headquarters: subdivision.headquarters || null,
+    sdpoOfficerName: subdivision.sdpoOfficerName || null,
+    createdAt: subdivision.createdAt || new Date().toISOString(),
+  };
+
+  return resilientUpsert('police_subdivisions', snakePayload, camelPayload);
+}
+
+export async function deletePoliceSubdivisionFromSupabase(id: string): Promise<boolean> {
+  const client = getSupabase();
+  if (!isSupabaseConfigured() || !client) return false;
+  try {
+    const { error } = await client.from('police_subdivisions').delete().eq('id', id);
+    if (error) {
+      console.error('Error deleting police subdivision from Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Supabase exception in deletePoliceSubdivision:', err);
+    return false;
+  }
+}
+
+// --- POLICE STATIONS ---
+export async function fetchPoliceStationsFromSupabase(): Promise<PoliceStation[] | null> {
+  const client = getSupabase();
+  if (!isSupabaseConfigured() || !client) return null;
+  try {
+    const { data, error } = await client.from('police_stations').select('*').order('name', { ascending: true });
+    if (error) {
+      console.warn('Error fetching police stations from Supabase:', error.message);
+      return null;
+    }
+    return (data || []).map((d: any) => ({
+      id: d.id,
+      subdivisionId: d.subdivision_id || d.subdivisionId || '',
+      subdivisionName: d.subdivision_name || d.subdivisionName || '',
+      districtId: d.district_id || d.districtId || '',
+      districtName: d.district_name || d.districtName || '',
+      name: d.name || '',
+      code: d.code || '',
+      shoName: d.sho_name || d.shoName || '',
+      contactNumber: d.contact_number || d.contactNumber || '',
+      createdAt: d.created_at || d.createdAt,
+    })) as PoliceStation[];
+  } catch (err) {
+    console.warn('Supabase exception in fetchPoliceStations:', err);
+    return null;
+  }
+}
+
+export async function savePoliceStationToSupabase(station: PoliceStation): Promise<boolean> {
+  const snakePayload = {
+    id: station.id,
+    subdivision_id: station.subdivisionId,
+    subdivision_name: station.subdivisionName,
+    district_id: station.districtId,
+    district_name: station.districtName,
+    name: station.name,
+    code: station.code || null,
+    sho_name: station.shoName || null,
+    contact_number: station.contactNumber || null,
+    created_at: station.createdAt || new Date().toISOString(),
+  };
+
+  const camelPayload = {
+    id: station.id,
+    subdivisionId: station.subdivisionId,
+    subdivisionName: station.subdivisionName,
+    districtId: station.districtId,
+    districtName: station.districtName,
+    name: station.name,
+    code: station.code || null,
+    shoName: station.shoName || null,
+    contactNumber: station.contactNumber || null,
+    createdAt: station.createdAt || new Date().toISOString(),
+  };
+
+  return resilientUpsert('police_stations', snakePayload, camelPayload);
+}
+
+export async function deletePoliceStationFromSupabase(id: string): Promise<boolean> {
+  const client = getSupabase();
+  if (!isSupabaseConfigured() || !client) return false;
+  try {
+    const { error } = await client.from('police_stations').delete().eq('id', id);
+    if (error) {
+      console.error('Error deleting police station from Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Supabase exception in deletePoliceStation:', err);
+    return false;
+  }
+}
+
 // --- SEED ALL LOCAL DATA TO SUPABASE ---
 export async function seedAllDataToSupabase(data: {
   userAccounts: UserAccount[];
@@ -1122,6 +1329,9 @@ export async function seedAllDataToSupabase(data: {
   udCases: UDCase[];
   dailyReports: DailyCrimeReport[];
   messages: UserMessage[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
+  policeStations?: PoliceStation[];
 }): Promise<{ success: boolean; message: string; countSummary: Record<string, number> }> {
   if (!isSupabaseConfigured() || !getSupabase()) {
     return {
@@ -1132,6 +1342,9 @@ export async function seedAllDataToSupabase(data: {
   }
 
   const counts: Record<string, number> = {
+    districts: 0,
+    subdivisions: 0,
+    policeStations: 0,
     userAccounts: 0,
     cases: 0,
     ios: 0,
@@ -1143,6 +1356,24 @@ export async function seedAllDataToSupabase(data: {
   };
 
   try {
+    // 1. Seed Hierarchy first (foreign key dependency: districts -> subdivisions -> stations)
+    if (data.districts && data.districts.length > 0) {
+      for (const d of data.districts) {
+        if (await savePoliceDistrictToSupabase(d)) counts.districts++;
+      }
+    }
+    if (data.subdivisions && data.subdivisions.length > 0) {
+      for (const s of data.subdivisions) {
+        if (await savePoliceSubdivisionToSupabase(s)) counts.subdivisions++;
+      }
+    }
+    if (data.policeStations && data.policeStations.length > 0) {
+      for (const ps of data.policeStations) {
+        if (await savePoliceStationToSupabase(ps)) counts.policeStations++;
+      }
+    }
+
+    // 2. Seed Users and Operations
     for (const acc of data.userAccounts) {
       if (await saveUserAccountToSupabase(acc)) counts.userAccounts++;
     }
