@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FIRCase,
   CaseStatus,
@@ -8,9 +8,13 @@ import {
   PoliceStationName,
   PunishmentTerm,
   PoliceStation,
+  PoliceDistrict,
+  PoliceSubdivision,
+  UserAccount,
   ReviewStatus,
   CrimeHead,
 } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { getDeadlineInfo, formatReadableDate, getPSFromRole, normalizeReviewStatus } from '../utils/helpers';
 import {
   CRIME_HEADS_CONFIG,
@@ -197,7 +201,11 @@ interface EditFIRModalProps {
   onDeleteSupervisionNote?: (caseId: string) => void;
   onDeleteCase?: (caseId: string) => void;
   currentRole: UserRole;
+  currentUserAccount?: UserAccount | null;
   investigatingOfficers: InvestigatingOfficer[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
+  policeStations?: PoliceStation[];
   isSupervisionMode?: boolean;
   isReadOnly?: boolean;
   availablePoliceStations?: PoliceStation[];
@@ -213,7 +221,11 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
   onDeleteSupervisionNote,
   onDeleteCase,
   currentRole,
+  currentUserAccount,
   investigatingOfficers,
+  districts = [],
+  subdivisions = [],
+  policeStations = [],
   isSupervisionMode = false,
   isReadOnly = false,
   availablePoliceStations,
@@ -222,10 +234,19 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
     isSupervisionMode ? 'case_review' : 'case_review'
   );
 
-  const psOptions =
-    availablePoliceStations && availablePoliceStations.length > 0
-      ? Array.from(new Set([(caseItem?.ps || 'Tarapur'), ...availablePoliceStations.map((p) => p.name)]))
-      : Array.from(new Set([(caseItem?.ps || 'Tarapur'), 'Tarapur', 'Asarganj', 'Sangrampur', 'Harpur']));
+  const effectivePoliceStations = useMemo(() => {
+    if (policeStations && policeStations.length > 0) return policeStations;
+    if (availablePoliceStations && availablePoliceStations.length > 0) return availablePoliceStations;
+    return INITIAL_POLICE_STATIONS;
+  }, [policeStations, availablePoliceStations]);
+
+  const psOptions = useMemo(() => {
+    const list = effectivePoliceStations.map((p) => p.name);
+    if (caseItem?.ps && !list.includes(caseItem.ps)) {
+      list.unshift(caseItem.ps);
+    }
+    return Array.from(new Set(list));
+  }, [effectivePoliceStations, caseItem]);
 
   const isDistrictLevel = currentRole === 'SP' || currentRole === 'DISTRICT_ADMIN';
   const isSuperUser = currentRole === 'SDPO' || isDistrictLevel;
