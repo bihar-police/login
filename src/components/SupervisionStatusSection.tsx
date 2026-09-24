@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { FIRCase, PoliceStationName, CaseStatus, UserRole, PoliceStation, CaseDesignation, PunishmentTerm, CCTNSSyncOption } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { formatReadableDate, getDeadlineInfo, matchesCaseFullDatabaseSearch, isCaseChargesheetedOrFinalForm } from '../utils/helpers';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
 import {
@@ -95,8 +96,8 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
 }) => {
   const psOptions =
     availablePoliceStations && availablePoliceStations.length > 0
-      ? availablePoliceStations.map((p) => p.name)
-      : ['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'];
+      ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
+      : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
 
   const isCircleInspector = currentRole === 'CI';
 
