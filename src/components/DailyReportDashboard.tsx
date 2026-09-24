@@ -10,8 +10,19 @@ import {
   OfficerLeaveRank,
   OfficerLeaveType,
   PoliceStation,
+  PoliceDistrict,
+  PoliceSubdivision,
+  UserAccount,
 } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
+import {
+  getUserJurisdictionContext,
+  getEffectiveDistricts,
+  getSubdivisionsForDistrict,
+  getPoliceStationsForJurisdiction,
+  getDistrictForPS,
+  getSubdivisionForPS,
+} from '../utils/jurisdictionHelpers';
 import {
   Building2,
   Shield,
@@ -45,6 +56,7 @@ interface DailyReportDashboardProps {
   cases: FIRCase[];
   ios: InvestigatingOfficer[];
   currentRole: UserRole;
+  currentUserAccount?: UserAccount | null;
   activePS?: PoliceStationName | null;
   monthlyArrestOverrides: Record<string, number>;
   onUpdateMonthlyArrestOverride: (monthKey: string, ps: string, figure: number) => void;
@@ -54,6 +66,8 @@ interface DailyReportDashboardProps {
   onDeleteLeaveEntry?: (leaveId: string) => void;
   isReadOnly?: boolean;
   availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
 }
 
 const ALL_FALLBACK_PS: PoliceStationName[] = Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
@@ -63,6 +77,7 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
   cases,
   ios,
   currentRole,
+  currentUserAccount,
   activePS,
   monthlyArrestOverrides,
   onUpdateMonthlyArrestOverride,
@@ -72,23 +87,50 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
   onDeleteLeaveEntry,
   isReadOnly = false,
   availablePoliceStations,
+  districts,
+  subdivisions,
 }) => {
   const activeStationsList: PoliceStationName[] =
     availablePoliceStations && availablePoliceStations.length > 0
       ? availablePoliceStations.map((p) => p.name as PoliceStationName)
       : ALL_FALLBACK_PS;
 
-  const isSuperUser = currentRole === 'SDPO';
+  const { isAdministrator, isDistrictLevel, isSubdivisionLevel, userDistrict, userSubdivision } =
+    getUserJurisdictionContext(currentRole, currentUserAccount || null);
+
+  const effectiveDistricts = useMemo(() => getEffectiveDistricts(districts), [districts]);
+
   const todayStr = new Date().toISOString().split('T')[0];
   const currentMonthKey = todayStr.slice(0, 7); // e.g. "2025-05"
 
-  // View state: Subdivision Level or PS Level
-  const [viewLevel, setViewLevel] = useState<'subdivision' | 'ps'>(
-    activePS ? 'ps' : 'subdivision'
-  );
+  // View state: 'state' | 'district' | 'subdivision' | 'ps'
+  const initialViewLevel: 'state' | 'district' | 'subdivision' | 'ps' = isAdministrator
+    ? 'state'
+    : isDistrictLevel
+    ? 'district'
+    : activePS
+    ? 'ps'
+    : 'subdivision';
+
+  const [viewLevel, setViewLevel] = useState<'state' | 'district' | 'subdivision' | 'ps'>(initialViewLevel);
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(isAdministrator ? 'ALL' : userDistrict);
+  const [selectedSubdivision, setSelectedSubdivision] = useState<string>(isSubdivisionLevel ? userSubdivision : 'ALL');
   const [selectedPS, setSelectedPS] = useState<PoliceStationName>(
     activePS || activeStationsList[0] || 'Tarapur'
   );
+
+  // Available subdivisions based on active district
+  const availableSubdivisions = useMemo(() => {
+    const activeDist = isAdministrator ? selectedDistrict : userDistrict;
+    return getSubdivisionsForDistrict(activeDist, subdivisions, districts);
+  }, [selectedDistrict, isAdministrator, userDistrict, subdivisions, districts]);
+
+  // Available stations based on active district & subdivision
+  const availableStations = useMemo(() => {
+    const activeDist = isAdministrator ? selectedDistrict : userDistrict;
+    const activeSubdiv = isSubdivisionLevel ? userSubdivision : selectedSubdivision;
+    return getPoliceStationsForJurisdiction(activeDist, activeSubdiv, availablePoliceStations);
+  }, [selectedDistrict, selectedSubdivision, isAdministrator, userDistrict, isSubdivisionLevel, userSubdivision, availablePoliceStations]);
 
   // Modal / prompt for Super User to override monthly arresting figure
   const [isEditingArrests, setIsEditingArrests] = useState(false);
@@ -110,13 +152,38 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
   const [newLeaveType, setNewLeaveType] = useState<OfficerLeaveType>('CL');
   const [newLeaveRemarks, setNewLeaveRemarks] = useState('');
 
-  // Determine current context PS filter (null means all subdivision)
-  const contextPS = viewLevel === 'subdivision' ? null : selectedPS;
+  // Core Jurisdiction Matcher for Dashboard Items
+  const isMatchCurrentView = (item: { ps?: string; district?: string; subdivision?: string }): boolean => {
+    if (viewLevel === 'state') return true;
+    if (viewLevel === 'district') {
+      const targetDist = isAdministrator ? selectedDistrict : userDistrict;
+      if (targetDist && targetDist !== 'ALL') {
+        const itemDist = item.district || getDistrictForPS(item.ps, availablePoliceStations);
+        return itemDist.toLowerCase() === targetDist.toLowerCase();
+      }
+      return true;
+    }
+    if (viewLevel === 'subdivision') {
+      const targetDist = isAdministrator ? selectedDistrict : userDistrict;
+      if (targetDist && targetDist !== 'ALL') {
+        const itemDist = item.district || getDistrictForPS(item.ps, availablePoliceStations);
+        if (itemDist.toLowerCase() !== targetDist.toLowerCase()) return false;
+      }
+      const targetSubdiv = isSubdivisionLevel ? userSubdivision : selectedSubdivision;
+      if (targetSubdiv && targetSubdiv !== 'ALL') {
+        const itemSubdiv = item.subdivision || getSubdivisionForPS(item.ps, availablePoliceStations);
+        if (itemSubdiv.toLowerCase() !== targetSubdiv.toLowerCase()) return false;
+      }
+      return true;
+    }
+    // 'ps' level
+    return !selectedPS || selectedPS === 'ALL' || item.ps === selectedPS;
+  };
 
   // Filtered reports
   const relevantReports = useMemo(() => {
-    return contextPS ? reports.filter((r) => r.ps === contextPS) : reports;
-  }, [reports, contextPS]);
+    return reports.filter(isMatchCurrentView);
+  }, [reports, viewLevel, selectedDistrict, selectedSubdivision, selectedPS, isAdministrator, userDistrict, userSubdivision, isSubdivisionLevel, availablePoliceStations]);
 
   // Combined Leave Ledger Entries (from active ledger + all daily reports)
   const allLeaveEntries = useMemo(() => {
@@ -139,13 +206,11 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
     });
 
     const list = Array.from(map.values());
-
-    // Filter by contextPS
-    const stationFiltered = contextPS ? list.filter((e) => e.ps === contextPS) : list;
+    const stationFiltered = list.filter(isMatchCurrentView);
 
     // Sort by arrival date ascending
     return stationFiltered.sort((a, b) => a.arrivalDate.localeCompare(b.arrivalDate));
-  }, [leaveLedger, reports, contextPS]);
+  }, [leaveLedger, reports, viewLevel, selectedDistrict, selectedSubdivision, selectedPS, isAdministrator, userDistrict, userSubdivision, isSubdivisionLevel, availablePoliceStations]);
 
   // Derived Leave Metrics
   const activeLeaves = useMemo(() => {
@@ -249,10 +314,39 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
     return relevantReports.filter((r) => r.date.startsWith(currentMonthKey));
   }, [relevantReports, currentMonthKey]);
 
+  // Target stations for force strength aggregation
+  const targetStations = useMemo(() => {
+    if (viewLevel === 'ps') {
+      return [selectedPS];
+    }
+    if (viewLevel === 'subdivision') {
+      const activeDist = isAdministrator ? selectedDistrict : userDistrict;
+      const activeSubdiv = isSubdivisionLevel ? userSubdivision : selectedSubdivision;
+      const stList = getPoliceStationsForJurisdiction(activeDist, activeSubdiv, availablePoliceStations);
+      return stList.map((p) => p.name as PoliceStationName);
+    }
+    if (viewLevel === 'district') {
+      const activeDist = isAdministrator ? selectedDistrict : userDistrict;
+      const stList = getPoliceStationsForJurisdiction(activeDist, 'ALL', availablePoliceStations);
+      return stList.map((p) => p.name as PoliceStationName);
+    }
+    // 'state'
+    return activeStationsList;
+  }, [
+    viewLevel,
+    selectedPS,
+    selectedDistrict,
+    selectedSubdivision,
+    isAdministrator,
+    isSubdivisionLevel,
+    userDistrict,
+    userSubdivision,
+    availablePoliceStations,
+    activeStationsList,
+  ]);
+
   // 1. Force Strength Aggregation (Rank-wise)
   const rankStrengthSummary = useMemo(() => {
-    // If a specific PS is selected, take the latest reported rankStrengths for that PS, or fallback to default
-    // If subdivision level, aggregate latest report of each of the 4 PS!
     const defaultRanks: Record<
       RankStrengthDetails['rank'],
       { total: number; present: number; onLeave: number; arriving: number; departing: number }
@@ -262,8 +356,6 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
       'ASI & PTC': { total: 0, present: 0, onLeave: 0, arriving: 0, departing: 0 },
       Constable: { total: 0, present: 0, onLeave: 0, arriving: 0, departing: 0 },
     };
-
-    const targetStations = contextPS ? [contextPS] : activeStationsList;
 
     targetStations.forEach((station) => {
       // Find latest report for this station that contains rankStrengths
@@ -298,7 +390,7 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
     });
 
     return defaultRanks;
-  }, [reports, contextPS]);
+  }, [reports, targetStations]);
 
   // 2. Total FIR registered today
   const totalFIRToday = useMemo(() => {
@@ -306,25 +398,25 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
     const fromReports = todayReports.reduce((acc, r) => acc + (r.firsRegisteredCount || 0), 0);
     // FIRs from main FIR case records created today
     const fromFIRRecords = cases.filter((c) => {
-      if (contextPS && c.ps !== contextPS) return false;
+      if (!isMatchCurrentView(c)) return false;
       return c.firDate === todayStr;
     }).length;
 
     return Math.max(fromReports, fromFIRRecords);
-  }, [todayReports, cases, todayStr, contextPS]);
+  }, [todayReports, cases, todayStr, viewLevel, selectedDistrict, selectedSubdivision, selectedPS, isAdministrator, userDistrict, userSubdivision, isSubdivisionLevel, availablePoliceStations]);
 
   // 3. Total FIR registered in month (From FIR records database!)
   const totalFIRInMonth = useMemo(() => {
     return cases.filter((c) => {
-      if (contextPS && c.ps !== contextPS) return false;
+      if (!isMatchCurrentView(c)) return false;
       return c.firDate.startsWith(currentMonthKey);
     }).length;
-  }, [cases, currentMonthKey, contextPS]);
+  }, [cases, currentMonthKey, viewLevel, selectedDistrict, selectedSubdivision, selectedPS, isAdministrator, userDistrict, userSubdivision, isSubdivisionLevel, availablePoliceStations]);
 
   // Monthly FIR breakdown
   const monthlyFIRBreakdown = useMemo(() => {
     const monthCases = cases.filter((c) => {
-      if (contextPS && c.ps !== contextPS) return false;
+      if (!isMatchCurrentView(c)) return false;
       return c.firDate.startsWith(currentMonthKey);
     });
     const srCount = monthCases.filter((c) => c.designation === 'SR').length;
@@ -332,7 +424,7 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
     const punishment7Plus = monthCases.filter((c) => c.punishmentTerm === '7_years_or_more').length;
     const punishment7Less = monthCases.filter((c) => c.punishmentTerm === 'less_than_7_years').length;
     return { srCount, nonSrCount, punishment7Plus, punishment7Less };
-  }, [cases, currentMonthKey, contextPS]);
+  }, [cases, currentMonthKey, viewLevel, selectedDistrict, selectedSubdivision, selectedPS, isAdministrator, userDistrict, userSubdivision, isSubdivisionLevel, availablePoliceStations]);
 
   // 4. Total Arresting Today
   const totalArrestingToday = useMemo(() => {
@@ -357,7 +449,15 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
   }, [currentMonthReports]);
 
   // Check if Superuser has an override for this month & scope
-  const overrideKey = `${currentMonthKey}_${contextPS || 'ALL'}`;
+  const scopeKey =
+    viewLevel === 'ps'
+      ? selectedPS
+      : viewLevel === 'subdivision'
+      ? (isSubdivisionLevel ? userSubdivision : selectedSubdivision)
+      : viewLevel === 'district'
+      ? (isAdministrator ? selectedDistrict : userDistrict)
+      : 'STATE';
+  const overrideKey = `${currentMonthKey}_${scopeKey || 'ALL'}`;
   const overriddenFigure = monthlyArrestOverrides[overrideKey];
   const finalMonthlyArrests =
     overriddenFigure !== undefined ? overriddenFigure : computedMonthlyArrests;
@@ -366,68 +466,216 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
   const handleSaveArrestOverride = () => {
     const val = parseInt(customArrestInput, 10);
     if (!isNaN(val) && val >= 0) {
-      onUpdateMonthlyArrestOverride(currentMonthKey, contextPS || 'ALL', val);
+      onUpdateMonthlyArrestOverride(currentMonthKey, scopeKey || 'ALL', val);
       setIsEditingArrests(false);
     }
   };
 
+  const currentScopeLabel = useMemo(() => {
+    if (viewLevel === 'state') return 'State-Wide View (All Districts)';
+    if (viewLevel === 'district') return `${isAdministrator ? selectedDistrict : userDistrict} District View`;
+    if (viewLevel === 'subdivision') return `${isSubdivisionLevel ? userSubdivision : selectedSubdivision} Subdiv View`;
+    return `${selectedPS} PS View`;
+  }, [viewLevel, selectedDistrict, selectedSubdivision, selectedPS, isAdministrator, userDistrict, userSubdivision, isSubdivisionLevel]);
+
   return (
     <div className="space-y-6">
       {/* Top View Selector Bar */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-900">
             <Layers className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-extrabold text-slate-900 dark:text-white text-sm">
-              Daily Crime & Force Command Dashboard
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-slate-900 dark:text-white text-sm">
+                Daily Crime & Force Command Dashboard
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">
+                {currentScopeLabel}
+              </span>
+            </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               Live operational metrics, force strength, daily arrests, and statutory records
             </p>
           </div>
         </div>
 
-        {/* Level Toggle & PS selector */}
-        <div className="flex items-center gap-2">
+        {/* View Level Toggles & Cascading Selectors */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* View Level Buttons */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-            <button
-              onClick={() => setViewLevel('subdivision')}
-              className={`px-3 py-1.5 rounded-md font-bold text-xs transition ${
-                viewLevel === 'subdivision'
-                  ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              Subdivision Level View
-            </button>
+            {/* Administrator gets: State, District, Subdivision, PS */}
+            {isAdministrator && (
+              <button
+                onClick={() => setViewLevel('state')}
+                className={`px-3 py-1.5 rounded-md font-bold text-xs transition cursor-pointer ${
+                  viewLevel === 'state'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                State Level View
+              </button>
+            )}
 
+            {/* Administrator & SP get District Level View */}
+            {(isAdministrator || isDistrictLevel) && (
+              <button
+                onClick={() => setViewLevel('district')}
+                className={`px-3 py-1.5 rounded-md font-bold text-xs transition cursor-pointer ${
+                  viewLevel === 'district'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                District Level View
+              </button>
+            )}
+
+            {/* Administrator, SP, and SDPO/CI get Subdivision Level View */}
+            {(isAdministrator || isDistrictLevel || isSubdivisionLevel) && (
+              <button
+                onClick={() => setViewLevel('subdivision')}
+                className={`px-3 py-1.5 rounded-md font-bold text-xs transition cursor-pointer ${
+                  viewLevel === 'subdivision'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Subdivision Level View
+              </button>
+            )}
+
+            {/* All get PS Level View */}
             <button
               onClick={() => setViewLevel('ps')}
-              className={`px-3 py-1.5 rounded-md font-bold text-xs transition ${
+              className={`px-3 py-1.5 rounded-md font-bold text-xs transition cursor-pointer ${
                 viewLevel === 'ps'
-                  ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               PS Level View
             </button>
           </div>
 
-          {viewLevel === 'ps' && (
+          {/* Cascading Context Selectors for Active Level */}
+          {viewLevel === 'district' && isAdministrator && (
             <select
-              value={selectedPS}
-              onChange={(e) => setSelectedPS(e.target.value as PoliceStationName)}
-              disabled={Boolean(activePS)}
-              className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white disabled:opacity-80"
+              value={selectedDistrict}
+              onChange={(e) => {
+                setSelectedDistrict(e.target.value);
+                setSelectedSubdivision('ALL');
+              }}
+              className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
             >
-              {activeStationsList.map((ps) => (
-                <option key={ps} value={ps}>
-                  {ps} PS
+              <option value="ALL">All Districts</option>
+              {effectiveDistricts.map((d) => (
+                <option key={d.id || d.name} value={d.name}>
+                  {d.name} District
                 </option>
               ))}
             </select>
+          )}
+
+          {viewLevel === 'district' && isDistrictLevel && (
+            <span className="px-2.5 py-1.5 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 rounded-lg text-xs font-bold text-blue-800 dark:text-blue-300">
+              {userDistrict} District (SP HQ)
+            </span>
+          )}
+
+          {viewLevel === 'subdivision' && (
+            <div className="flex items-center gap-1.5">
+              {isAdministrator && (
+                <select
+                  value={selectedDistrict}
+                  onChange={(e) => {
+                    setSelectedDistrict(e.target.value);
+                    setSelectedSubdivision('ALL');
+                  }}
+                  className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
+                >
+                  <option value="ALL">All Districts</option>
+                  {effectiveDistricts.map((d) => (
+                    <option key={d.id || d.name} value={d.name}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {(isAdministrator || isDistrictLevel) && (
+                <select
+                  value={selectedSubdivision}
+                  onChange={(e) => setSelectedSubdivision(e.target.value)}
+                  className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
+                >
+                  <option value="ALL">All Subdivisions</option>
+                  {availableSubdivisions.map((s) => (
+                    <option key={s.id || s.name} value={s.name}>
+                      {s.name} Subdiv
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {isSubdivisionLevel && (
+                <span className="px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-900 rounded-lg text-xs font-bold text-indigo-800 dark:text-indigo-300">
+                  {userSubdivision} Subdiv (SDPO)
+                </span>
+              )}
+            </div>
+          )}
+
+          {viewLevel === 'ps' && (
+            <div className="flex items-center gap-1.5">
+              {isAdministrator && (
+                <select
+                  value={selectedDistrict}
+                  onChange={(e) => {
+                    setSelectedDistrict(e.target.value);
+                    setSelectedSubdivision('ALL');
+                  }}
+                  className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
+                >
+                  <option value="ALL">All Districts</option>
+                  {effectiveDistricts.map((d) => (
+                    <option key={d.id || d.name} value={d.name}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {(isAdministrator || isDistrictLevel) && (
+                <select
+                  value={selectedSubdivision}
+                  onChange={(e) => setSelectedSubdivision(e.target.value)}
+                  className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
+                >
+                  <option value="ALL">All Subdivisions</option>
+                  {availableSubdivisions.map((s) => (
+                    <option key={s.id || s.name} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <select
+                value={selectedPS}
+                onChange={(e) => setSelectedPS(e.target.value as PoliceStationName)}
+                disabled={Boolean(activePS)}
+                className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white disabled:opacity-80 cursor-pointer"
+              >
+                {availableStations.map((ps) => (
+                  <option key={ps.id || ps.name} value={ps.name}>
+                    {ps.name} PS
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
       </div>
@@ -453,7 +701,7 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
           <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
             <span>Date: {todayStr}</span>
             <span className="font-bold text-indigo-600 dark:text-indigo-400">
-              {contextPS ? `${contextPS} PS` : 'All 4 Stations'}
+              {currentScopeLabel}
             </span>
           </div>
         </div>
