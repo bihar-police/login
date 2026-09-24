@@ -11,6 +11,11 @@ import {
   UserAccount,
   CrimeHead,
 } from '../types';
+import {
+  INITIAL_DISTRICTS,
+  INITIAL_SUBDIVISIONS,
+  INITIAL_POLICE_STATIONS,
+} from '../data/mockData';
 import { getPSFromRole } from '../utils/helpers';
 import {
   CRIME_HEADS_CONFIG,
@@ -82,13 +87,39 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
       currentUserAccount?.role === 'CI' ||
       currentUserAccount?.policeStation === 'Subdivision HQ');
 
-  const defaultUserDistrict = currentUserAccount?.district && currentUserAccount.district !== 'ALL'
-    ? currentUserAccount.district
-    : (districts[0]?.name || 'Munger');
+  // Fallback safety guards ensure the dropdowns NEVER show empty or only 4 hardcoded stations
+  const effectiveDistricts = useMemo(() => {
+    return districts && districts.length > 0 ? districts : INITIAL_DISTRICTS;
+  }, [districts]);
 
-  const defaultUserSubdivision = currentUserAccount?.subdivision && currentUserAccount.subdivision !== 'ALL'
-    ? currentUserAccount.subdivision
-    : (subdivisions[0]?.name || 'Tarapur');
+  const effectiveSubdivisions = useMemo(() => {
+    return subdivisions && subdivisions.length > 0 ? subdivisions : INITIAL_SUBDIVISIONS;
+  }, [subdivisions]);
+
+  const effectivePoliceStations = useMemo(() => {
+    if (policeStations && policeStations.length > 0) return policeStations;
+    if (availablePoliceStations && availablePoliceStations.length > 0) return availablePoliceStations;
+    return INITIAL_POLICE_STATIONS;
+  }, [policeStations, availablePoliceStations]);
+
+  // Default District Resolution
+  const defaultUserDistrict = useMemo(() => {
+    if (currentUserAccount?.district && currentUserAccount.district !== 'ALL') {
+      return currentUserAccount.district;
+    }
+    return effectiveDistricts[0]?.name || 'Munger';
+  }, [currentUserAccount, effectiveDistricts]);
+
+  // Default Subdivision Resolution
+  const defaultUserSubdivision = useMemo(() => {
+    if (isSubdivisionOfficer && currentUserAccount?.subdivision && currentUserAccount.subdivision !== 'ALL') {
+      return currentUserAccount.subdivision;
+    }
+    const matching = effectiveSubdivisions.filter(
+      (s) => !s.districtName || s.districtName.toLowerCase() === defaultUserDistrict.toLowerCase()
+    );
+    return matching[0]?.name || effectiveSubdivisions[0]?.name || 'Tarapur';
+  }, [isSubdivisionOfficer, currentUserAccount, defaultUserDistrict, effectiveSubdivisions]);
 
   const activePS =
     isAdministrator || isDistrictOfficer || isSubdivisionOfficer
@@ -108,51 +139,49 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
 
   // Available Subdivisions based on selectedDistrict
   const availableSubdivisions = useMemo(() => {
-    if (!selectedDistrict || selectedDistrict === 'ALL') return subdivisions;
-    const filtered = subdivisions.filter(
+    if (!selectedDistrict || selectedDistrict === 'ALL') return effectiveSubdivisions;
+    const filtered = effectiveSubdivisions.filter(
       (s) => !s.districtName || s.districtName.toLowerCase() === selectedDistrict.toLowerCase()
     );
-    return filtered.length > 0 ? filtered : subdivisions;
-  }, [selectedDistrict, subdivisions]);
+    return filtered.length > 0 ? filtered : effectiveSubdivisions;
+  }, [selectedDistrict, effectiveSubdivisions]);
 
   // Available Police Stations based on selectedSubdivision
   const filteredPoliceStations = useMemo(() => {
     if (activePS) {
-      return [{ id: 'ps-active', name: activePS, subdivisionName: selectedSubdivision }];
+      return [{ id: 'ps-active', name: activePS, subdivisionName: selectedSubdivision, districtName: selectedDistrict }];
     }
     if (selectedSubdivision && selectedSubdivision !== 'ALL') {
-      const match = policeStations.filter(
+      const match = effectivePoliceStations.filter(
         (p) =>
           !p.subdivisionName ||
           p.subdivisionName.toLowerCase() === selectedSubdivision.toLowerCase()
       );
       if (match.length > 0) return match;
     }
-    if (availablePoliceStations && availablePoliceStations.length > 0) {
-      return availablePoliceStations;
+    if (selectedDistrict && selectedDistrict !== 'ALL') {
+      const match = effectivePoliceStations.filter(
+        (p) => !p.districtName || p.districtName.toLowerCase() === selectedDistrict.toLowerCase()
+      );
+      if (match.length > 0) return match;
     }
-    return policeStations.length > 0
-      ? policeStations
-      : [
-          { id: 'ps-1', name: 'Tarapur', subdivisionName: 'Tarapur' },
-          { id: 'ps-2', name: 'Asarganj', subdivisionName: 'Tarapur' },
-          { id: 'ps-3', name: 'Sangrampur', subdivisionName: 'Tarapur' },
-          { id: 'ps-4', name: 'Harpur', subdivisionName: 'Tarapur' },
-        ];
-  }, [selectedSubdivision, activePS, policeStations, availablePoliceStations]);
+    return effectivePoliceStations;
+  }, [selectedSubdivision, selectedDistrict, activePS, effectivePoliceStations]);
 
-  // Sync cascading dropdowns
+  // Sync cascading dropdowns when modal opens or selections change
   useEffect(() => {
+    if (!isOpen) return;
     if (isAdministrator) {
-      if (!selectedDistrict && districts.length > 0) {
-        setSelectedDistrict(districts[0].name);
+      if (!selectedDistrict || !effectiveDistricts.some((d) => d.name.toLowerCase() === selectedDistrict.toLowerCase())) {
+        setSelectedDistrict(defaultUserDistrict);
       }
     } else {
       setSelectedDistrict(defaultUserDistrict);
     }
-  }, [isAdministrator, defaultUserDistrict, districts]);
+  }, [isOpen, isAdministrator, defaultUserDistrict, effectiveDistricts]);
 
   useEffect(() => {
+    if (!isOpen) return;
     if (isAdministrator || isDistrictOfficer) {
       if (availableSubdivisions.length > 0) {
         const match = availableSubdivisions.find(
@@ -165,9 +194,10 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
     } else {
       setSelectedSubdivision(defaultUserSubdivision);
     }
-  }, [availableSubdivisions, isAdministrator, isDistrictOfficer, defaultUserSubdivision]);
+  }, [isOpen, availableSubdivisions, isAdministrator, isDistrictOfficer, defaultUserSubdivision]);
 
   useEffect(() => {
+    if (!isOpen) return;
     if (activePS) {
       setPs(activePS as PoliceStationName);
     } else if (filteredPoliceStations.length > 0) {
@@ -178,7 +208,7 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
         setPs(filteredPoliceStations[0].name as PoliceStationName);
       }
     }
-  }, [filteredPoliceStations, activePS]);
+  }, [isOpen, filteredPoliceStations, activePS]);
 
   // Filter IO list to only show IOs for the selected PS or subdivision
   const availableIOs = useMemo(() => {
@@ -209,6 +239,24 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
   const [deadlineDays, setDeadlineDays] = useState<60 | 90>(60);
   const [punishmentTerm, setPunishmentTerm] = useState<PunishmentTerm>('7_years_or_more');
   const [psProgressRemarks, setPsProgressRemarks] = useState('');
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setFirNumber('');
+      setFirDate(todayStr);
+      setSections('');
+      setSelectedCrimeHeads(['Other / General IPC & BNS']);
+      setIsCrimeHeadManuallySet(false);
+      setAddHeadSelectValue('');
+      setComplainantName('');
+      setComplainantPhone('');
+      setPlaceOfOccurrence('');
+      setDeadlineDays(60);
+      setPunishmentTerm('7_years_or_more');
+      setPsProgressRemarks('');
+    }
+  }, [isOpen]);
 
   // Auto-detect multi-crime heads when sections change if not manually overridden
   useEffect(() => {
@@ -351,8 +399,8 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
                     onChange={(e) => setSelectedDistrict(e.target.value)}
                     className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-amber-500"
                   >
-                    {districts.map((d) => (
-                      <option key={d.id} value={d.name}>
+                    {effectiveDistricts.map((d) => (
+                      <option key={d.id || d.name} value={d.name}>
                         🏛️ {d.name} District
                       </option>
                     ))}
@@ -376,11 +424,15 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
                     onChange={(e) => setSelectedSubdivision(e.target.value)}
                     className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-amber-500"
                   >
-                    {availableSubdivisions.map((s) => (
-                      <option key={s.id} value={s.name}>
-                        🏢 {s.name} Subdiv
-                      </option>
-                    ))}
+                    {availableSubdivisions.length > 0 ? (
+                      availableSubdivisions.map((s) => (
+                        <option key={s.id || s.name} value={s.name}>
+                          🏢 {s.name} Subdiv
+                        </option>
+                      ))
+                    ) : (
+                      <option value="Tarapur">🏢 Tarapur Subdiv</option>
+                    )}
                   </select>
                 ) : (
                   <div className="w-full bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1">
