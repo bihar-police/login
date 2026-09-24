@@ -142,7 +142,42 @@ CREATE TABLE IF NOT EXISTS public.user_accounts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. FIR CASES TABLE
+-- 2. POLICE DISTRICTS TABLE
+CREATE TABLE IF NOT EXISTS public.police_districts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  state TEXT DEFAULT 'Bihar',
+  hq_name TEXT,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. POLICE SUBDIVISIONS TABLE
+CREATE TABLE IF NOT EXISTS public.police_subdivisions (
+  id TEXT PRIMARY KEY,
+  district_id TEXT REFERENCES public.police_districts(id) ON DELETE CASCADE,
+  district_name TEXT NOT NULL,
+  name TEXT NOT NULL,
+  headquarters TEXT,
+  sdpo_officer_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. POLICE STATIONS TABLE
+CREATE TABLE IF NOT EXISTS public.police_stations (
+  id TEXT PRIMARY KEY,
+  subdivision_id TEXT REFERENCES public.police_subdivisions(id) ON DELETE CASCADE,
+  subdivision_name TEXT NOT NULL,
+  district_id TEXT REFERENCES public.police_districts(id) ON DELETE CASCADE,
+  district_name TEXT NOT NULL,
+  name TEXT NOT NULL,
+  code TEXT,
+  sho_name TEXT,
+  contact_number TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. FIR CASES TABLE
 CREATE TABLE IF NOT EXISTS public.fir_cases (
   id TEXT PRIMARY KEY,
   fir_number TEXT NOT NULL,
@@ -362,6 +397,9 @@ END $$;
 
 -- 11. DISABLE ROW LEVEL SECURITY (RLS) FOR DIRECT APP SYNC ACCESS
 ALTER TABLE public.user_accounts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.police_districts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.police_subdivisions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.police_stations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fir_cases DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.investigating_officers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leave_ledger DISABLE ROW LEVEL SECURITY;
