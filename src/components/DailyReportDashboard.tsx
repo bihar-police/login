@@ -11,6 +11,7 @@ import {
   OfficerLeaveType,
   PoliceStation,
 } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import {
   Building2,
   Shield,
@@ -55,7 +56,7 @@ interface DailyReportDashboardProps {
   availablePoliceStations?: PoliceStation[];
 }
 
-const ALL_FALLBACK_PS: PoliceStationName[] = ['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'];
+const ALL_FALLBACK_PS: PoliceStationName[] = Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
 
 export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
   reports,
