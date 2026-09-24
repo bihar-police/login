@@ -32,6 +32,9 @@ import {
   UDCase,
   DailyCrimeReport,
   UserMessage,
+  PoliceDistrict,
+  PoliceSubdivision,
+  PoliceStation,
 } from '../types';
 
 interface SupabaseConfigModalProps {
@@ -47,6 +50,9 @@ interface SupabaseConfigModalProps {
     udCases: UDCase[];
     dailyReports: DailyCrimeReport[];
     messages: UserMessage[];
+    districts?: PoliceDistrict[];
+    subdivisions?: PoliceSubdivision[];
+    policeStations?: PoliceStation[];
   };
 }
 
@@ -150,7 +156,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
       if (res.success) {
         setStatusMessage({
           type: 'success',
-          text: `Sync Complete: ${res.message} (Accounts: ${res.countSummary.userAccounts}, Cases: ${res.countSummary.cases}, IOs: ${res.countSummary.ios})`,
+          text: `Sync Complete: ${res.message} (Districts: ${res.countSummary.districts || 0}, Subdivisions: ${res.countSummary.subdivisions || 0}, PS: ${res.countSummary.policeStations || 0}, Cases: ${res.countSummary.cases || 0}, Users: ${res.countSummary.userAccounts || 0})`,
         });
         handleTestConnection();
       } else {
