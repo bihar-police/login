@@ -1511,6 +1511,8 @@ export default function App() {
             onAddLeaveEntry={handleAddLeaveEntry}
             onDeleteLeaveEntry={handleDeleteLeaveEntry}
             availablePoliceStations={policeStations}
+            districts={districts}
+            subdivisions={subdivisions}
           />
         )}
 
