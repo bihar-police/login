@@ -79,6 +79,15 @@ import {
   deleteUserMessageFromSupabase,
   fetchMonthlyArrestOverridesFromSupabase,
   saveMonthlyArrestOverrideToSupabase,
+  fetchPoliceDistrictsFromSupabase,
+  savePoliceDistrictToSupabase,
+  deletePoliceDistrictFromSupabase,
+  fetchPoliceSubdivisionsFromSupabase,
+  savePoliceSubdivisionToSupabase,
+  deletePoliceSubdivisionFromSupabase,
+  fetchPoliceStationsFromSupabase,
+  savePoliceStationToSupabase,
+  deletePoliceStationFromSupabase,
 } from './services/supabaseService';
 
 const DEFAULT_FILTERS: FilterOptions = {
@@ -371,6 +380,9 @@ export default function App() {
         reports,
         msgs,
         overrides,
+        districtsList,
+        subdivisionsList,
+        policeStationsList,
       ] = await Promise.all([
         fetchUserAccountsFromSupabase(),
         fetchFIRCasesFromSupabase(),
@@ -381,8 +393,38 @@ export default function App() {
         fetchDailyReportsFromSupabase(),
         fetchUserMessagesFromSupabase(),
         fetchMonthlyArrestOverridesFromSupabase(),
+        fetchPoliceDistrictsFromSupabase(),
+        fetchPoliceSubdivisionsFromSupabase(),
+        fetchPoliceStationsFromSupabase(),
       ]);
 
+      // 1. Sync Hierarchy
+      if (districtsList && districtsList.length > 0) {
+        setDistricts(districtsList);
+      } else if (districtsList && districtsList.length === 0) {
+        // Table exists in Supabase but is empty, populate initial districts
+        for (const d of INITIAL_DISTRICTS) {
+          savePoliceDistrictToSupabase(d).catch(() => {});
+        }
+      }
+
+      if (subdivisionsList && subdivisionsList.length > 0) {
+        setSubdivisions(subdivisionsList);
+      } else if (subdivisionsList && subdivisionsList.length === 0) {
+        for (const s of INITIAL_SUBDIVISIONS) {
+          savePoliceSubdivisionToSupabase(s).catch(() => {});
+        }
+      }
+
+      if (policeStationsList && policeStationsList.length > 0) {
+        setPoliceStations(policeStationsList);
+      } else if (policeStationsList && policeStationsList.length === 0) {
+        for (const ps of INITIAL_POLICE_STATIONS) {
+          savePoliceStationToSupabase(ps).catch(() => {});
+        }
+      }
+
+      // 2. Sync Users & Operations
       if (accounts && accounts.length > 0) {
         // Merge with initial accounts to ensure nobody is lost
         const mergedMap = new Map<string, UserAccount>();
@@ -1502,15 +1544,42 @@ export default function App() {
         subdivisions={subdivisions}
         policeStations={policeStations}
         currentUserAccount={currentUserAccount}
-        onAddDistrict={(d) => setDistricts((prev) => [...prev, d])}
-        onUpdateDistrict={(d) => setDistricts((prev) => prev.map((item) => (item.id === d.id ? d : item)))}
-        onDeleteDistrict={(id) => setDistricts((prev) => prev.filter((d) => d.id !== id))}
-        onAddSubdivision={(s) => setSubdivisions((prev) => [...prev, s])}
-        onUpdateSubdivision={(s) => setSubdivisions((prev) => prev.map((item) => (item.id === s.id ? s : item)))}
-        onDeleteSubdivision={(id) => setSubdivisions((prev) => prev.filter((s) => s.id !== id))}
-        onAddPoliceStation={(ps) => setPoliceStations((prev) => [...prev, ps])}
-        onUpdatePoliceStation={(ps) => setPoliceStations((prev) => prev.map((item) => (item.id === ps.id ? ps : item)))}
-        onDeletePoliceStation={(id) => setPoliceStations((prev) => prev.filter((p) => p.id !== id))}
+        onAddDistrict={(d) => {
+          setDistricts((prev) => [...prev, d]);
+          savePoliceDistrictToSupabase(d);
+        }}
+        onUpdateDistrict={(d) => {
+          setDistricts((prev) => prev.map((item) => (item.id === d.id ? d : item)));
+          savePoliceDistrictToSupabase(d);
+        }}
+        onDeleteDistrict={(id) => {
+          setDistricts((prev) => prev.filter((d) => d.id !== id));
+          deletePoliceDistrictFromSupabase(id);
+        }}
+        onAddSubdivision={(s) => {
+          setSubdivisions((prev) => [...prev, s]);
+          savePoliceSubdivisionToSupabase(s);
+        }}
+        onUpdateSubdivision={(s) => {
+          setSubdivisions((prev) => prev.map((item) => (item.id === s.id ? s : item)));
+          savePoliceSubdivisionToSupabase(s);
+        }}
+        onDeleteSubdivision={(id) => {
+          setSubdivisions((prev) => prev.filter((s) => s.id !== id));
+          deletePoliceSubdivisionFromSupabase(id);
+        }}
+        onAddPoliceStation={(ps) => {
+          setPoliceStations((prev) => [...prev, ps]);
+          savePoliceStationToSupabase(ps);
+        }}
+        onUpdatePoliceStation={(ps) => {
+          setPoliceStations((prev) => prev.map((item) => (item.id === ps.id ? ps : item)));
+          savePoliceStationToSupabase(ps);
+        }}
+        onDeletePoliceStation={(id) => {
+          setPoliceStations((prev) => prev.filter((p) => p.id !== id));
+          deletePoliceStationFromSupabase(id);
+        }}
       />
 
       <SupabaseConfigModal
@@ -1526,6 +1595,9 @@ export default function App() {
           udCases,
           dailyReports,
           messages,
+          districts,
+          subdivisions,
+          policeStations,
         }}
       />
 
