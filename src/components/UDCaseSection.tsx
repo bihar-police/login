@@ -9,8 +9,13 @@ import {
   CaseDesignation,
   PunishmentTerm,
   CCTNSSyncOption,
+  PoliceDistrict,
+  PoliceSubdivision,
+  UserAccount,
 } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
+import { matchesJurisdictionFilter } from '../utils/jurisdictionHelpers';
 import {
   formatReadableDate,
   getPSFromRole,
@@ -60,6 +65,9 @@ interface UDCaseSectionProps {
   onEditFIR: (caseItem: FIRCase) => void;
   isReadOnly?: boolean;
   availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
+  currentUserAccount?: UserAccount | null;
 }
 
 export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
@@ -73,6 +81,9 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
   onEditFIR,
   isReadOnly = false,
   availablePoliceStations,
+  districts,
+  subdivisions,
+  currentUserAccount,
 }) => {
   const activePS = getPSFromRole(currentRole);
   const isSuperUser = currentRole === 'SDPO' || currentRole === 'SP' || currentRole === 'DISTRICT_ADMIN' || currentRole === 'ADMINISTRATOR';
@@ -86,6 +97,10 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'UD' | 'NON_SR'>('NON_SR');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingUD, setEditingUD] = useState<UDCase | null>(null);
+
+  // Jurisdiction Filter States
+  const [districtFilter, setDistrictFilter] = useState<string>('ALL');
+  const [subdivisionFilter, setSubdivisionFilter] = useState<string>('ALL');
 
   // New UD Form State
   const todayStr = new Date().toISOString().split('T')[0];
@@ -151,8 +166,10 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
 
   // Reset Filters
   const handleResetFilters = () => {
-    setSearchQuery('');
+    setDistrictFilter('ALL');
+    setSubdivisionFilter('ALL');
     setPsFilter('ALL');
+    setSearchQuery('');
     setStatusFilter('ALL');
     setChargesheetedFilter('ALL');
     setDeadlineLimitFilter('ALL');
@@ -177,16 +194,37 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
     setDisposedEndDate('');
   };
 
-  // Filtered UD cases
-  const visibleUDCases = activePS ? udCases.filter((u) => u.ps === activePS) : udCases;
+  // Filtered UD cases with jurisdiction filtering
+  const visibleUDCases = useMemo(() => {
+    const base = activePS ? udCases.filter((u) => u.ps === activePS) : udCases;
+    return base.filter((u) =>
+      matchesJurisdictionFilter(
+        u,
+        districtFilter,
+        subdivisionFilter,
+        psFilter,
+        availablePoliceStations
+      )
+    );
+  }, [udCases, activePS, districtFilter, subdivisionFilter, psFilter, availablePoliceStations]);
 
   // Filtered NON-SR cases with all Supervision & Review filters applied
   const filteredNonSrCases = useMemo(() => {
     const baseCases = activePS ? nonSrCases.filter((c) => c.ps === activePS) : nonSrCases;
 
     return baseCases.filter((c) => {
-      // PS Filter
-      if (psFilter !== 'ALL' && c.ps !== psFilter) return false;
+      // 0. Jurisdiction Filter
+      if (
+        !matchesJurisdictionFilter(
+          c,
+          districtFilter,
+          subdivisionFilter,
+          psFilter,
+          availablePoliceStations
+        )
+      ) {
+        return false;
+      }
 
       // Status Filter
       if (statusFilter !== 'ALL' && c.status !== statusFilter) return false;
@@ -600,6 +638,34 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
           {/* Complete Supervision & Review Filter Matrix */}
           <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3.5 text-xs">
             
+            {/* Command Jurisdiction Filter Bar */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    NON-SR Desk Command Jurisdiction
+                  </span>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Filter cases by District, Subdivision & Police Station
+                  </p>
+                </div>
+              </div>
+              <JurisdictionFilterControls
+                currentRole={currentRole}
+                currentUserAccount={currentUserAccount || null}
+                districts={districts}
+                subdivisions={subdivisions}
+                availablePoliceStations={availablePoliceStations}
+                selectedDistrict={districtFilter}
+                selectedSubdivision={subdivisionFilter}
+                selectedPS={psFilter}
+                onChangeDistrict={setDistrictFilter}
+                onChangeSubdivision={setSubdivisionFilter}
+                onChangePS={(ps) => setPsFilter(ps as any)}
+              />
+            </div>
+
             {/* Search Bar & Primary Dropdowns */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div className="relative md:col-span-2">
@@ -1086,7 +1152,36 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
       {/* TAB 2: UNNATURAL DEATH (UD) CASES VIEW */}
       {/* ========================================================================= */}
       {activeSubTab === 'UD' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          {/* Command Jurisdiction Filter Bar for UD Desk */}
+          <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  UD Register Command Jurisdiction
+                </span>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Filter Unnatural Death cases across District, Subdivision & Police Station
+                </p>
+              </div>
+            </div>
+            <JurisdictionFilterControls
+              currentRole={currentRole}
+              currentUserAccount={currentUserAccount || null}
+              districts={districts}
+              subdivisions={subdivisions}
+              availablePoliceStations={availablePoliceStations}
+              selectedDistrict={districtFilter}
+              selectedSubdivision={subdivisionFilter}
+              selectedPS={psFilter}
+              onChangeDistrict={setDistrictFilter}
+              onChangeSubdivision={setSubdivisionFilter}
+              onChangePS={(ps) => setPsFilter(ps as any)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {visibleUDCases.length === 0 ? (
             <div className="col-span-2 bg-white dark:bg-slate-900 p-12 text-center rounded-2xl border border-slate-200 dark:border-slate-800">
               <FileText className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
@@ -1169,6 +1264,7 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
               </div>
             ))
           )}
+          </div>
         </div>
       )}
 
