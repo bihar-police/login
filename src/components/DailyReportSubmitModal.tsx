@@ -14,6 +14,7 @@ import {
   OfficerLeaveRank,
   PoliceStation,
 } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import {
   X,
   FileText,
@@ -62,8 +63,8 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
 }) => {
   const psOptions =
     availablePoliceStations && availablePoliceStations.length > 0
-      ? availablePoliceStations.map((p) => p.name)
-      : ['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'];
+      ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
+      : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
 
   const initialPS = defaultPS || (psOptions[0] as PoliceStationName) || 'Tarapur';
   const todayStr = new Date().toISOString().split('T')[0];
