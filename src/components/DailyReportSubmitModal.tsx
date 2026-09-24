@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   DailyCrimeReport,
   PoliceStationName,
@@ -13,8 +13,14 @@ import {
   LeaveLedgerEntry,
   OfficerLeaveRank,
   PoliceStation,
+  PoliceDistrict,
+  PoliceSubdivision,
+  UserRole,
+  UserAccount,
 } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
+import { getUserJurisdictionContext, getPoliceStationsForJurisdiction } from '../utils/jurisdictionHelpers';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
 import {
   X,
   FileText,
@@ -43,6 +49,10 @@ interface DailyReportSubmitModalProps {
   defaultPS?: PoliceStationName | null;
   isSuperUser?: boolean;
   availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
+  currentRole?: UserRole;
+  currentUserAccount?: UserAccount | null;
 }
 
 const DEFAULT_RANKS: RankStrengthDetails['rank'][] = [
@@ -60,16 +70,41 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
   defaultPS,
   isSuperUser = false,
   availablePoliceStations,
+  districts,
+  subdivisions,
+  currentRole = 'ADMINISTRATOR',
+  currentUserAccount = null,
 }) => {
-  const psOptions =
-    availablePoliceStations && availablePoliceStations.length > 0
-      ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
-      : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
+  const { isAdministrator, isDistrictLevel, userDistrict, userSubdivision, isSubdivisionLevel } =
+    getUserJurisdictionContext(currentRole, currentUserAccount);
+
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(isAdministrator ? 'ALL' : userDistrict);
+  const [selectedSubdivision, setSelectedSubdivision] = useState<string>(isSubdivisionLevel ? userSubdivision : 'ALL');
+
+  // Filter available stations based on selected District and Subdivision
+  const filteredAvailableStations = useMemo(() => {
+    const activeDist = isAdministrator ? selectedDistrict : userDistrict;
+    const activeSubdiv = isSubdivisionLevel ? userSubdivision : selectedSubdivision;
+    return getPoliceStationsForJurisdiction(activeDist, activeSubdiv, availablePoliceStations);
+  }, [selectedDistrict, selectedSubdivision, isAdministrator, userDistrict, isSubdivisionLevel, userSubdivision, availablePoliceStations]);
+
+  const psOptions = useMemo(() => {
+    return Array.from(new Set(filteredAvailableStations.map((p) => p.name as PoliceStationName)));
+  }, [filteredAvailableStations]);
 
   const initialPS = defaultPS || (psOptions[0] as PoliceStationName) || 'Tarapur';
   const todayStr = new Date().toISOString().split('T')[0];
 
   const [ps, setPs] = useState<PoliceStationName>(initialPS);
+
+  // Sync selected PS when filtered options change
+  useEffect(() => {
+    if (defaultPS) {
+      setPs(defaultPS);
+    } else if (psOptions.length > 0 && !psOptions.includes(ps)) {
+      setPs(psOptions[0]);
+    }
+  }, [psOptions, defaultPS]);
   const [date, setDate] = useState(todayStr);
   const [submittedBy, setSubmittedBy] = useState(`SHO ${initialPS} PS`);
 
@@ -409,28 +444,61 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
         {/* Modal Form */}
         <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-6 text-xs">
           {/* Station, Date, Officer metadata */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80">
-            <div>
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Police Station *
-              </label>
-              <select
-                value={ps}
-                onChange={(e) => {
-                  const newPS = e.target.value as PoliceStationName;
-                  setPs(newPS);
-                  setSubmittedBy(`SHO ${newPS} PS`);
-                }}
-                disabled={!isSuperUser && Boolean(defaultPS)}
-                className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-slate-900 dark:text-white disabled:opacity-75"
-              >
-                {psOptions.map((st) => (
-                  <option key={st} value={st}>
-                    {st} PS
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="space-y-4 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80">
+            {/* If superuser, show cascading District & Subdivision filters to restrict PS options */}
+            {(isAdministrator || isDistrictLevel) && (
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-700">
+                <div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider block">
+                    Target Jurisdiction Filters
+                  </span>
+                  <p className="text-[10px] text-slate-500">
+                    Filters the Police Station options available below based on your command level
+                  </p>
+                </div>
+                <JurisdictionFilterControls
+                  currentRole={currentRole}
+                  currentUserAccount={currentUserAccount}
+                  districts={districts}
+                  subdivisions={subdivisions}
+                  availablePoliceStations={availablePoliceStations}
+                  selectedDistrict={selectedDistrict}
+                  selectedSubdivision={selectedSubdivision}
+                  selectedPS="ALL"
+                  onChangeDistrict={(d) => {
+                    setSelectedDistrict(d);
+                    setSelectedSubdivision('ALL');
+                  }}
+                  onChangeSubdivision={setSelectedSubdivision}
+                  onChangePS={() => {}}
+                  compact={true}
+                  includeAllOption={true}
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Police Station *
+                </label>
+                <select
+                  value={ps}
+                  onChange={(e) => {
+                    const newPS = e.target.value as PoliceStationName;
+                    setPs(newPS);
+                    setSubmittedBy(`SHO ${newPS} PS`);
+                  }}
+                  disabled={!isSuperUser && Boolean(defaultPS)}
+                  className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-slate-900 dark:text-white disabled:opacity-75"
+                >
+                  {psOptions.map((st) => (
+                    <option key={st} value={st}>
+                      {st} PS
+                    </option>
+                  ))}
+                </select>
+              </div>
 
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -458,6 +526,7 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
                 className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium"
               />
             </div>
+          </div>
           </div>
 
           {/* Section 1: Total FIR registered last day */}
