@@ -9,6 +9,8 @@ import {
   UserMessage,
   LeaveLedgerEntry,
   PoliceStation,
+  PoliceDistrict,
+  PoliceSubdivision,
 } from '../types';
 import { formatIndianDate, formatReadableDate, getPSFromRole, normalizeLeaveType } from '../utils/helpers';
 import {
@@ -60,6 +62,8 @@ interface DailyCrimeReportProps {
   onDeleteLeaveEntry?: (leaveId: string) => void;
   canSubmitReport?: boolean;
   availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
 }
 
 export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
@@ -84,6 +88,8 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
   onAddLeaveEntry,
   onDeleteLeaveEntry,
   availablePoliceStations,
+  districts,
+  subdivisions,
 }) => {
   const activePS = getPSFromRole(currentRole);
   const isSuperUser = currentRole === 'SDPO';
@@ -307,8 +313,11 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
           cases={cases}
           ios={ios}
           currentRole={currentRole}
+          currentUserAccount={currentUserAccount}
           activePS={activePS}
           availablePoliceStations={availablePoliceStations}
+          districts={districts}
+          subdivisions={subdivisions}
           monthlyArrestOverrides={monthlyArrestOverrides}
           onUpdateMonthlyArrestOverride={onUpdateMonthlyArrestOverride}
           leaveLedger={leaveLedger}
@@ -501,6 +510,9 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
           currentRole={currentRole}
           activePS={activePS}
           availablePoliceStations={availablePoliceStations}
+          districts={districts}
+          subdivisions={subdivisions}
+          currentUserAccount={currentUserAccount}
           onViewReport={(report) => setViewingReport(report)}
         />
       )}
