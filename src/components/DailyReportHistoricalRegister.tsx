@@ -6,6 +6,7 @@ import {
   UserRole,
   PoliceStation,
 } from '../types';
+import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import {
   formatReadableDate,
   formatIndianDate,
@@ -65,10 +66,10 @@ export const DailyReportHistoricalRegister: React.FC<DailyReportHistoricalRegist
   onSelectIOForProfile,
   availablePoliceStations,
 }) => {
-  const psOptions =
+  const psOptions: PoliceStationName[] =
     availablePoliceStations && availablePoliceStations.length > 0
-      ? availablePoliceStations.map((p) => p.name)
-      : ['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'];
+      ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
+      : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -139,7 +140,7 @@ export const DailyReportHistoricalRegister: React.FC<DailyReportHistoricalRegist
       0
     );
     const stationsReported = singleDateReports.map((r) => r.ps);
-    const missingStations: PoliceStationName[] = (['Tarapur', 'Asarganj', 'Sangrampur', 'Harpur'] as PoliceStationName[]).filter(
+    const missingStations: PoliceStationName[] = psOptions.filter(
       (ps) => !stationsReported.includes(ps)
     );
 
