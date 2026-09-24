@@ -30,6 +30,8 @@ import {
   CheckCircle2,
   MapPin,
   FolderTree,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface UserManagementModalProps {
@@ -73,6 +75,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [editPS, setEditPS] = useState<PoliceStationName>('Tarapur');
   
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showAllPasswords, setShowAllPasswords] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -116,24 +120,80 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   // - PS Command (SHO/IO/Operator/Reader): CANNOT add users
   const canAddUser = isAdministrator || isDistrictOfficer || isSubdivisionOfficer;
 
-  const userDistrict = currentUserAccount?.district || 'Munger';
-  const userSubdivision = currentUserAccount?.subdivision || 'Tarapur';
+  const userDistrict = (currentUserAccount?.district || 'Munger').trim();
+  const userSubdivision = (currentUserAccount?.subdivision || 'Tarapur').trim();
 
-  // Filter accounts according to viewer's jurisdiction
-  const displayedAccounts = isAdministrator
-    ? accounts
-    : isDistrictOfficer
-    ? accounts.filter((a) => !a.district || a.district.toLowerCase() === userDistrict.toLowerCase())
-    : isSubdivisionOfficer
-    ? accounts.filter(
-        (a) =>
-          (!a.district || a.district.toLowerCase() === userDistrict.toLowerCase()) &&
-          (!a.subdivision || a.subdivision.toLowerCase() === userSubdivision.toLowerCase())
-      )
-    : accounts.filter((a) => a.id === currentUserAccount?.id);
+  // Strict Hierarchical Access Key Visibility:
+  // 1. Administrator: Can see access keys of all user accounts across all districts & subdivisions.
+  // 2. SP / District Command: Can see access keys of his whole district (SDPOs, CIs, SHOs, Operators, and other officers in his district).
+  //    SP cannot see Master Admin, and cannot see officers of other districts.
+  // 3. SDPO / Subdivision Command: Can see access keys of his whole subdivision (SDPO, CI, SHOs, Operators, and PS officers in his subdivision).
+  //    SDPO cannot see Master Admin, SP/District HQ, or other subdivisions / other districts.
+  // 4. PS Level Officer: Can only see their own access key.
+  const displayedAccounts = accounts.filter((a) => {
+    // 1. Master Administrator sees all accounts across the state
+    if (isAdministrator) {
+      return true;
+    }
+
+    const accDistrict = (a.district || '').trim();
+    const accSubdivision = (a.subdivision || '').trim();
+    const accRole = (a.role || '').toUpperCase();
+    const accUserId = (a.userId || '').toLowerCase();
+
+    // Never show Master Administrator credentials to non-administrators
+    if (accRole === 'ADMINISTRATOR' || accUserId === 'admin') {
+      return false;
+    }
+
+    // 2. SP / District Level Command:
+    if (isDistrictOfficer) {
+      if (!accDistrict || accDistrict.toUpperCase() === 'ALL') {
+        return false;
+      }
+      return accDistrict.toLowerCase() === userDistrict.toLowerCase();
+    }
+
+    // 3. SDPO / Subdivision Level Command:
+    if (isSubdivisionOfficer) {
+      // Cannot see SP or District HQ accounts
+      if (accRole === 'SP' || accRole === 'DISTRICT_ADMIN' || a.policeStation === 'District HQ') {
+        return false;
+      }
+      const matchesDistrict = Boolean(accDistrict && accDistrict.toLowerCase() === userDistrict.toLowerCase());
+      const matchesSubdivision = Boolean(
+        accSubdivision &&
+        accSubdivision.toUpperCase() !== 'ALL' &&
+        accSubdivision.toLowerCase() === userSubdivision.toLowerCase()
+      );
+
+      return matchesDistrict && matchesSubdivision;
+    }
+
+    // 4. PS Level Officer: Only their own account
+    return a.id === currentUserAccount?.id || accUserId === currentUserAccount?.userId?.toLowerCase();
+  });
 
   const togglePasswordVisibility = (id: string) => {
     setShowPasswords((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleAllPasswords = () => {
+    const nextState = !showAllPasswords;
+    setShowAllPasswords(nextState);
+    const updated: Record<string, boolean> = {};
+    displayedAccounts.forEach((acc) => {
+      updated[acc.id] = nextState;
+    });
+    setShowPasswords(updated);
+  };
+
+  const handleCopyCredentials = (acc: UserAccount) => {
+    const credText = `User ID: ${acc.userId}\nPassword: ${acc.password}\nOfficer: ${acc.officerName} (${acc.rank})\nJurisdiction: ${acc.policeStation} (${acc.subdivision || 'HQ'}, ${acc.district})`;
+    navigator.clipboard.writeText(credText).then(() => {
+      setCopiedId(acc.id);
+      setTimeout(() => setCopiedId(null), 2500);
+    });
   };
 
   const handleDeleteUser = (acc: UserAccount) => {
@@ -319,17 +379,25 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               <Key className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-widest">
-                  PORTAL SECURITY & ACCESS CONTROL
+                  PORTAL ACCESS KEYS & CREDENTIALS
                 </span>
-                {canAddUser ? (
-                  <span className="bg-emerald-500/20 text-emerald-300 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3" /> Command Management Mode
+                {isAdministrator ? (
+                  <span className="bg-rose-500/20 text-rose-300 text-[9px] font-mono font-bold px-2 py-0.5 rounded border border-rose-500/40 uppercase flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-rose-400" /> Master Admin — All Districts
+                  </span>
+                ) : isDistrictOfficer ? (
+                  <span className="bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold px-2 py-0.5 rounded border border-amber-500/40 uppercase flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-amber-400" /> District Command (SP) — Whole {userDistrict} District
+                  </span>
+                ) : isSubdivisionOfficer ? (
+                  <span className="bg-sky-500/20 text-sky-300 text-[9px] font-mono font-bold px-2 py-0.5 rounded border border-sky-500/40 uppercase flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-sky-400" /> Subdivision Command (SDPO) — Whole {userSubdivision} Subdivision
                   </span>
                 ) : (
-                  <span className="bg-slate-800 text-slate-300 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-slate-700 uppercase">
-                    Individual Officer Access
+                  <span className="bg-slate-800 text-slate-300 text-[9px] font-mono font-bold px-2 py-0.5 rounded border border-slate-700 uppercase">
+                    Individual Officer Account
                   </span>
                 )}
 
@@ -342,18 +410,18 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   }`}
                 >
                   <Database className="w-2.5 h-2.5" />
-                  {isSupabaseConfigured() ? 'Supabase Sync Active' : 'Local Storage Mode'}
+                  {isSupabaseConfigured() ? 'Supabase Cloud Sync' : 'Local Storage Mode'}
                 </span>
               </div>
               <h2 className="text-lg font-black tracking-tight text-white mt-0.5">
-                User Credentials & Permission Level Management
+                Officer Access Keys & User Account Credentials
               </h2>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition"
+            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -364,14 +432,14 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
           
           {/* Notifications */}
           {successMsg && (
-            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
               <CheckCircle className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <span>{successMsg}</span>
             </div>
           )}
 
           {errorMsg && (
-            <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg text-rose-800 dark:text-rose-300 text-xs font-bold flex items-center gap-2">
+            <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg text-rose-800 dark:text-rose-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
               <span>{errorMsg}</span>
             </div>
@@ -381,26 +449,38 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
             <div>
               <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <span>Registered Users ({displayedAccounts.length} Accounts)</span>
+                <span>Access Keys ({displayedAccounts.length} Active Accounts)</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-bold border border-blue-200 dark:border-blue-800">
                   {isAdministrator
-                    ? 'All Districts'
+                    ? 'Statewide Scope (All Districts)'
                     : isDistrictOfficer
-                    ? `${userDistrict} District`
+                    ? `${userDistrict} District Scope (SP, SDPOs, CIs, SHOs)`
                     : isSubdivisionOfficer
-                    ? `${userSubdivision} Subdivision (${userDistrict})`
+                    ? `${userSubdivision} Subdivision Scope (SDPO, CI, SHOs)`
                     : `${currentUserAccount?.policeStation || 'PS Level'}`}
                 </span>
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                {isAdministrator && 'Full Administrator Privileges: You can add users for any District, Subdivision, and Police Station.'}
-                {isDistrictOfficer && `District Command (SP): You can create and manage user accounts within ${userDistrict} District only.`}
-                {isSubdivisionOfficer && `Subdivision Command: You can create and manage user accounts within ${userSubdivision} Subdivision only.`}
-                {isPSOfficer && 'Police Station Level: You can view and edit your own credentials. Adding new user accounts is restricted to Subdivision (SDPO) and District (SP) Command.'}
+                {isAdministrator && 'Master Administrator: Access keys of all police officers across all districts and subdivisions are visible.'}
+                {isDistrictOfficer && `District Chief (SP): Access keys of your entire district (${userDistrict}) are visible, including SDPOs, CIs, and SHOs.`}
+                {isSubdivisionOfficer && `Subdivision Officer (SDPO): Access keys of your entire subdivision (${userSubdivision}) are visible, including CI, SHOs, and PS officers.`}
+                {isPSOfficer && 'Police Station Level: You can view and copy your own credentials only.'}
               </p>
             </div>
 
             <div className="flex items-center gap-2">
+              {displayedAccounts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={toggleAllPasswords}
+                  className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+                  title={showAllPasswords ? 'Hide All Passwords' : 'Show All Passwords'}
+                >
+                  {showAllPasswords ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span>{showAllPasswords ? 'Hide All Keys' : 'Reveal All Keys'}</span>
+                </button>
+              )}
+
               {canAddUser ? (
                 <>
                   <button
@@ -520,7 +600,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Password *
+                    Password (Access Key) *
                   </label>
                   <input
                     type="text"
@@ -554,14 +634,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     <select
                       value={newDistrict}
                       onChange={(e) => {
-                        const d = e.target.value;
-                        setNewDistrict(d);
-                        const matchingSub = subdivisions.find((s) => !s.districtName || s.districtName.toLowerCase() === d.toLowerCase());
-                        if (matchingSub) {
-                          setNewSubdivision(matchingSub.name);
-                          const matchingPs = policeStations.find((p) => p.subdivisionName?.toLowerCase() === matchingSub.name.toLowerCase());
-                          if (matchingPs) setNewPS(matchingPs.name);
-                        }
+                        const dist = e.target.value;
+                        setNewDistrict(dist);
+                        const matchSubs = subdivisions.filter((s) => !s.districtName || s.districtName.toLowerCase() === dist.toLowerCase());
+                        if (matchSubs[0]) setNewSubdivision(matchSubs[0].name);
                       }}
                       className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-semibold text-slate-900 dark:text-white"
                     >
@@ -574,17 +650,17 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   ) : (
                     <div className="p-2 bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                       <span>{userDistrict} District</span>
-                      <span className="text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded font-mono">
+                      <span className="text-[10px] bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono">
                         Locked
                       </span>
                     </div>
                   )}
                 </div>
 
-                {/* Role / Command Level */}
+                {/* Role Selection */}
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Role / Command Level
+                    User Role
                   </label>
                   <select
                     value={newRole}
@@ -593,10 +669,13 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                       setNewRole(r);
                       if (r === 'SP' || r === 'DISTRICT_ADMIN') {
                         setNewPS('District HQ');
+                        setNewSubdivision('');
                         setNewPermissionLevel('ADMIN');
                       } else if (r === 'SDPO' || r === 'CI') {
                         setNewPS('Subdivision HQ');
-                        if (r === 'SDPO') setNewPermissionLevel('ADMIN');
+                        setNewPermissionLevel(r === 'SDPO' ? 'ADMIN' : 'EDITOR');
+                      } else if (r === 'OPERATOR') {
+                        setNewPermissionLevel('OPERATOR');
                       }
                     }}
                     className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-semibold text-slate-900 dark:text-white"
@@ -737,14 +816,15 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   <th className="p-3">Officer Name & Rank</th>
                   <th className="p-3">Permission Level</th>
                   <th className="p-3">User ID</th>
-                  <th className="p-3">Password</th>
+                  <th className="p-3">Access Key (Password)</th>
                   <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {displayedAccounts.map((acc) => {
                   const isEditing = editingId === acc.id;
-                  const isVisiblePass = showPasswords[acc.id];
+                  const isVisiblePass = showPasswords[acc.id] || showAllPasswords;
+                  const isCopied = copiedId === acc.id;
 
                   return (
                     <tr
@@ -836,13 +916,15 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                             className="w-full p-1 bg-white dark:bg-slate-900 border border-slate-300 rounded text-xs font-mono font-bold text-blue-700 dark:text-blue-400"
                           />
                         ) : (
-                          <span className="font-mono font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-1 rounded border border-blue-200 dark:border-blue-900 inline-block">
-                            {acc.userId}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-1 rounded border border-blue-200 dark:border-blue-900 inline-block">
+                              {acc.userId}
+                            </span>
+                          </div>
                         )}
                       </td>
 
-                      {/* Password */}
+                      {/* Password / Access Key */}
                       <td className="p-3">
                         {isEditing ? (
                           <input
@@ -853,16 +935,32 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                           />
                         ) : (
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">
+                            <span className={`font-mono text-xs font-bold px-2 py-1 rounded border transition ${
+                              isVisiblePass
+                                ? 'bg-amber-50 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700'
+                                : 'text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700'
+                            }`}>
                               {isVisiblePass ? acc.password : '••••••••'}
                             </span>
                             <button
                               type="button"
                               onClick={() => togglePasswordVisibility(acc.id)}
-                              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
-                              title={isVisiblePass ? 'Hide Password' : 'Show Password'}
+                              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                              title={isVisiblePass ? 'Hide Access Key' : 'Reveal Access Key'}
                             >
-                              {isVisiblePass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              {isVisiblePass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5 text-amber-500" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCredentials(acc)}
+                              className={`p-1 rounded transition cursor-pointer ${
+                                isCopied
+                                  ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-950'
+                                  : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800'
+                              }`}
+                              title="Copy Credentials to Clipboard"
+                            >
+                              {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
                           </div>
                         )}
@@ -874,13 +972,13 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => handleSaveEdit(acc)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded transition"
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded transition cursor-pointer"
                             >
                               Save
                             </button>
                             <button
                               onClick={() => setEditingId(null)}
-                              className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-xs rounded"
+                              className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-xs rounded cursor-pointer"
                             >
                               Cancel
                             </button>
@@ -891,14 +989,14 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                             <button
                               type="button"
                               onClick={() => confirmDeleteUser(acc)}
-                              className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[11px] rounded transition shadow-xs"
+                              className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[11px] rounded transition shadow-xs cursor-pointer"
                             >
                               Yes, Delete
                             </button>
                             <button
                               type="button"
                               onClick={() => setDeletingId(null)}
-                              className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] rounded transition"
+                              className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] rounded transition cursor-pointer"
                             >
                               Cancel
                             </button>
@@ -911,7 +1009,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                 className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded border border-slate-300 dark:border-slate-700 transition inline-flex items-center gap-1 cursor-pointer"
                               >
                                 <Edit2 className="w-3 h-3 text-slate-500" />
-                                <span>Edit Credentials</span>
+                                <span>Edit</span>
                               </button>
                             )}
                             {canAddUser && (
@@ -942,7 +1040,12 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
           <div className="p-3 bg-amber-50 dark:bg-slate-800/80 border border-amber-200 dark:border-slate-700 rounded-lg text-amber-900 dark:text-amber-300 text-[11px] leading-relaxed flex items-start gap-2">
             <Lock className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
             <div>
-              <strong>Super User Authorization Control:</strong> Permission levels (`ADMIN`, `EDITOR`, `VIEWER`) determine whether an officer can record or modify crime cases, land disputes, and daily supervision reports. Only SDPO Super User can create new accounts or elevate privileges.
+              <strong>Supervisory Access Key Hierarchy:</strong>
+              <ul className="list-disc list-inside mt-1 space-y-0.5 text-[10px]">
+                <li><strong>Administrator:</strong> Can view, manage, and reset access keys across all Districts & Subdivisions.</li>
+                <li><strong>SP (District Command):</strong> Can view and manage access keys for all officers within their District (SDPO, CI, SHO, and PS officers).</li>
+                <li><strong>SDPO (Subdivision Command):</strong> Can view and manage access keys for all officers within their Subdivision (CI, SHO, and PS officers).</li>
+              </ul>
             </div>
           </div>
 
@@ -952,7 +1055,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         <div className="p-4 bg-slate-100 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 text-right">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-900 text-white dark:bg-slate-800 hover:bg-slate-800 font-bold text-xs rounded-lg transition"
+            className="px-4 py-2 bg-slate-900 text-white dark:bg-slate-800 hover:bg-slate-800 font-bold text-xs rounded-lg transition cursor-pointer"
           >
             Close Settings
           </button>
