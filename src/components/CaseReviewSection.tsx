@@ -5,7 +5,13 @@ import {
   CaseReviewFilterOptions,
   InvestigatingOfficer,
   UserRole,
+  PoliceStation,
+  PoliceDistrict,
+  PoliceSubdivision,
+  UserAccount,
 } from '../types';
+import { matchesJurisdictionFilter } from '../utils/jurisdictionHelpers';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
 import {
   Search,
   Filter,
@@ -55,6 +61,10 @@ interface CaseReviewSectionProps {
   onDeleteCase?: (caseId: string) => void;
   onOpenQRCode?: (caseItem: FIRCase) => void;
   isReadOnly?: boolean;
+  availablePoliceStations?: PoliceStation[];
+  districts?: PoliceDistrict[];
+  subdivisions?: PoliceSubdivision[];
+  currentUserAccount?: UserAccount | null;
 }
 
 export type ReviewSortField =
@@ -138,7 +148,13 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
   onDeleteCase,
   onOpenQRCode,
   isReadOnly = false,
+  availablePoliceStations,
+  districts,
+  subdivisions,
+  currentUserAccount,
 }) => {
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('ALL');
+  const [selectedSubdivision, setSelectedSubdivision] = useState<string>('ALL');
   const [filters, setFilters] = useState<CaseReviewFilterOptions>(DEFAULT_REVIEW_FILTERS);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(true);
   const [selectedCaseForReport, setSelectedCaseForReport] = useState<FIRCase | null>(null);
@@ -178,8 +194,18 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
   // Filter Cases Logic
   const filteredCases = useMemo(() => {
     return cases.filter((c) => {
-      // PS Filter
-      if (filters.policeStation !== 'ALL' && c.ps !== filters.policeStation) return false;
+      // Jurisdiction Filter
+      if (
+        !matchesJurisdictionFilter(
+          c,
+          selectedDistrict,
+          selectedSubdivision,
+          filters.policeStation,
+          availablePoliceStations
+        )
+      ) {
+        return false;
+      }
 
       // Classification Filter
       if (filters.designation !== 'ALL' && c.designation !== filters.designation) return false;
@@ -325,7 +351,7 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
 
       return true;
     });
-  }, [cases, filters]);
+  }, [cases, filters, selectedDistrict, selectedSubdivision, availablePoliceStations]);
 
   // Multi-Sort Comparator Logic
   const sortedAndFilteredCases = useMemo(() => {
@@ -805,15 +831,33 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
         {showAdvancedFilters && (
           <div className="space-y-4 pt-3 border-t border-slate-100 dark:border-slate-800">
             {/* Row 1: Jurisdiction & Core Status */}
-            <div className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                <span className="text-[10px] font-black uppercase text-purple-900 dark:text-purple-300 block tracking-wider flex items-center gap-1.5">
-                  <Building className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                  <span>1. Core Case Identification & Jurisdiction</span>
-                </span>
-                <span className="text-[10px] text-slate-500 font-medium">
-                  Filter by Officer/IO, Police Station, and Date Ranges
-                </span>
+            <div className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <Building className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Case Review Command Jurisdiction
+                    </span>
+                    <p className="text-[10px] text-slate-500">
+                      Filter judicial reviews by District, Subdivision & Police Station
+                    </p>
+                  </div>
+                </div>
+                <JurisdictionFilterControls
+                  currentRole={currentRole}
+                  currentUserAccount={currentUserAccount || null}
+                  districts={districts}
+                  subdivisions={subdivisions}
+                  availablePoliceStations={availablePoliceStations}
+                  selectedDistrict={selectedDistrict}
+                  selectedSubdivision={selectedSubdivision}
+                  selectedPS={filters.policeStation}
+                  onChangeDistrict={setSelectedDistrict}
+                  onChangeSubdivision={setSelectedSubdivision}
+                  onChangePS={(ps) => setFilters((prev) => ({ ...prev, policeStation: ps as any, ioName: '' }))}
+                  compact={true}
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-2">
