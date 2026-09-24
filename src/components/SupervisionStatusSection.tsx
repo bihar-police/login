@@ -833,6 +833,34 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
         {isFiltersOpen && (
           <div className="p-4 space-y-4 animate-fadeIn">
 
+            {/* Jurisdiction Command Hierarchy Controls */}
+            <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl border border-purple-200 dark:border-purple-900/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                <div>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    Supervision Command Jurisdiction
+                  </span>
+                  <p className="text-[10px] text-slate-500">
+                    Filter supervised cases across District, Subdivision & Police Stations
+                  </p>
+                </div>
+              </div>
+              <JurisdictionFilterControls
+                currentRole={currentRole}
+                currentUserAccount={currentUserAccount || null}
+                districts={districts}
+                subdivisions={subdivisions}
+                availablePoliceStations={availablePoliceStations}
+                selectedDistrict={selectedDistrict}
+                selectedSubdivision={selectedSubdivision}
+                selectedPS={psFilter}
+                onChangeDistrict={setSelectedDistrict}
+                onChangeSubdivision={setSelectedSubdivision}
+                onChangePS={(ps) => setPsFilter(ps as any)}
+              />
+            </div>
+
         {/* Statutory Limit Status Tabs (Overdue, Urgent, On Track) */}
         <div className="flex flex-wrap items-center gap-1.5 pb-1 border-b border-slate-100 dark:border-slate-800 text-[11px]">
           <span className="font-bold text-slate-500 mr-1 flex items-center gap-1">
