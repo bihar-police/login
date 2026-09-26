@@ -44,6 +44,7 @@ import { IOManagement } from './components/IOManagement';
 import { DailyCrimeReportSection } from './components/DailyCrimeReport';
 import { SupervisionStatusSection } from './components/SupervisionStatusSection';
 import { CaseReviewSection } from './components/CaseReviewSection';
+import { UnifiedAnalyticsGraphs } from './components/UnifiedAnalyticsGraphs';
 import { AIChatbot } from './components/AIChatbot';
 import { LoginModal } from './components/LoginModal';
 import { UserManagementModal } from './components/UserManagementModal';
@@ -1729,7 +1730,22 @@ export default function App() {
           />
         )}
 
-        {/* Tab 8: Embedded AI Assistant */}
+        {/* Tab 8: Unified Analytics & Comparison Graphs */}
+        {activeTab === 'analytics_graphs' && (
+          <UnifiedAnalyticsGraphs
+            cases={cases.filter(isRecordInJurisdictionScope)}
+            ios={ios.filter(isRecordInUserBaseScope)}
+            dailyReports={dailyReports.filter(isRecordInJurisdictionScope)}
+            availablePoliceStations={policeStations}
+            currentRole={currentRole}
+            activePS={activePS}
+            onViewCase={(c) => setViewingCase(c)}
+            onApplyFilter={handleApplyFilter}
+            onTabChange={setActiveTab}
+          />
+        )}
+
+        {/* Tab 9: Embedded AI Assistant */}
         {activeTab === 'ai_assistant' && (
           <AIChatbot
             cases={cases.filter(isRecordInJurisdictionScope)}
@@ -1904,5 +1920,5 @@ export default function App() {
       </footer>
 
     </div>
-  ); 
+  );
 }
