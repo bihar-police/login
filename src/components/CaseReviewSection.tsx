@@ -50,7 +50,7 @@ import {
   Plus,
   QrCode,
 } from 'lucide-react';
-import { formatReadableDate, matchesReviewFilter, normalizeReviewStatus } from '../utils/helpers';
+import { formatReadableDate, matchesReviewFilter, normalizeReviewStatus, isReviewYes, isReviewPending, isReviewNA } from '../utils/helpers';
 
 interface CaseReviewSectionProps {
   cases: FIRCase[];
@@ -1621,7 +1621,7 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
                     <div className="flex flex-wrap gap-1 text-[11px]">
                       {c.isInjuryPresent ? (
                         <span className="bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 font-bold px-1.5 py-0.5 rounded">
-                          🩸 Injury ({c.injuryReportReceived ? 'Rep Recvd' : 'Rep Pending'})
+                          🩸 Injury ({isReviewYes(c.injuryReportReceived) ? 'Rep Recvd' : isReviewPending(c.injuryReportReceived) ? 'Rep Pending' : 'Rep N/A'})
                         </span>
                       ) : (
                         <span className="bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
@@ -1629,19 +1629,19 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
                         </span>
                       )}
 
-                      {c.pmReportReceived && (
+                      {isReviewYes(c.pmReportReceived) && (
                         <span className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded">
                           ✓ PM Recvd
                         </span>
                       )}
 
-                      {c.visceraPreserved && (
+                      {isReviewYes(c.visceraPreserved) && (
                         <span className="bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 font-bold px-1.5 py-0.5 rounded">
                           🧪 Viscera
                         </span>
                       )}
 
-                      {c.fslVisitedPO && (
+                      {isReviewYes(c.fslVisitedPO) && (
                         <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-900 dark:text-blue-300 font-bold px-1.5 py-0.5 rounded">
                           ✓ FSL Visited PO
                         </span>
@@ -1653,7 +1653,7 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
                         </span>
                       )}
 
-                      {c.fslReportReceived ? (
+                      {isReviewYes(c.fslReportReceived) ? (
                         <span className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded">
                           ✓ FSL Report Done
                         </span>
@@ -1754,35 +1754,35 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
                     <div className="flex flex-wrap gap-1 text-[10px]">
                       {c.isArmsCase && (
                         <span className="bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 font-bold px-1.5 py-0.5 rounded">
-                          🔫 Arms ({c.armsReportReceived ? 'Rep Recvd' : c.armsSentForVerification ? 'Sent Verif' : 'Pending'})
+                          🔫 Arms ({isReviewYes(c.armsReportReceived) ? 'Rep Recvd' : isReviewYes(c.armsSentForVerification) ? 'Sent Verif' : 'Pending'})
                         </span>
                       )}
 
                       {c.isLiquorCase && (
                         <span className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded">
-                          🍾 Liquor ({c.liquorLabReportReceived ? 'Lab Done' : 'Lab Pending'})
+                          🍾 Liquor ({isReviewYes(c.liquorLabReportReceived) ? 'Lab Done' : 'Lab Pending'})
                         </span>
                       )}
 
                       {c.isNdpsCase && (
                         <span className="bg-purple-100 dark:bg-purple-950/80 text-purple-900 dark:text-purple-300 font-bold px-1.5 py-0.5 rounded">
-                          💊 NDPS ({c.ndpsExhibitSentToSafeHouse ? 'Safe House ✓' : 'Safe House ✕'})
+                          💊 NDPS ({isReviewYes(c.ndpsExhibitSentToSafeHouse) ? 'Safe House ✓' : 'Safe House ✕'})
                         </span>
                       )}
 
-                      {c.poVideographyDone && (
+                      {isReviewYes(c.poVideographyDone) && (
                         <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-900 dark:text-blue-300 font-bold px-1.5 py-0.5 rounded">
                           📹 PO Video ✓
                         </span>
                       )}
 
-                      {c.poPreserved && (
+                      {isReviewYes(c.poPreserved) && (
                         <span className="bg-teal-100 dark:bg-teal-950/80 text-teal-900 dark:text-teal-300 font-bold px-1.5 py-0.5 rounded">
                           🛡️ PO Preserved ✓
                         </span>
                       )}
 
-                      {c.sidLinkedWithFir && (
+                      {isReviewYes(c.sidLinkedWithFir) && (
                         <span className="bg-indigo-100 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-300 font-bold px-1.5 py-0.5 rounded">
                           🔗 SID Linked
                         </span>
