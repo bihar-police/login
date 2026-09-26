@@ -956,6 +956,7 @@ export default function App() {
       alert('Permission Denied: Your account has Read-Only (VIEWER) access.');
       return;
     }
+    const todayStr = new Date().toISOString().split('T')[0];
     const targetSubdivision = getSubdivisionForPS(newReportData.ps);
     const newReport: DailyCrimeReport = {
       ...newReportData,
@@ -965,6 +966,124 @@ export default function App() {
     };
     setDailyReports((prev) => [newReport, ...prev]);
     saveDailyReportToSupabase(newReport);
+
+    // 1. Process Case-Specific Arrests logged in the Daily Report
+    if (newReport.arrestDetails?.caseArrests && newReport.arrestDetails.caseArrests.length > 0) {
+      setCases((prevCases) => {
+        let updatedCases = [...prevCases];
+
+        newReport.arrestDetails!.caseArrests.forEach((ca: any) => {
+          // Find FIRCase by ID or fallback to matching typed FIR number in the same PS
+          let matchedCaseIdx = updatedCases.findIndex((c) => c.id === ca.caseId);
+          if (matchedCaseIdx === -1 && ca.caseNumber) {
+            const match = ca.caseNumber.match(/(\d+\/\d+)/);
+            const extractedNo = match ? match[1] : ca.caseNumber.trim();
+            matchedCaseIdx = updatedCases.findIndex(
+              (c) =>
+                c.ps.toLowerCase() === newReport.ps.toLowerCase() &&
+                c.firNumber.toLowerCase() === extractedNo.toLowerCase()
+            );
+          }
+
+          if (matchedCaseIdx !== -1) {
+            const targetCase = { ...updatedCases[matchedCaseIdx] };
+            let list = [...(targetCase.accusedList || [])];
+
+            // A: Update selected accused checkboxes to 'Arrested'
+            const checkedNames = ca.arrestedAccusedNames || [];
+            list = list.map((a) => {
+              if (checkedNames.includes(a.name)) {
+                return { ...a, status: 'Arrested' as const };
+              }
+              return a;
+            });
+
+            // B: Add manually added accused names to 'Arrested'
+            const manualNames = ca.manualAccusedNames || [];
+            manualNames.forEach((mName: string) => {
+              const cleaned = mName.trim();
+              const existingIdx = list.findIndex((a) => a.name.toLowerCase() === cleaned.toLowerCase());
+              if (existingIdx !== -1) {
+                list[existingIdx] = { ...list[existingIdx], status: 'Arrested' as const };
+              } else {
+                list.push({
+                  id: `acc-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+                  name: cleaned,
+                  status: 'Arrested' as const,
+                });
+              }
+            });
+
+            // C: Recalculate counts & string rosters
+            const arrested = list.filter((a) => a.status === 'Arrested');
+            const toArrest = list.filter((a) => a.status !== 'Arrested');
+
+            targetCase.accusedList = list;
+            targetCase.arrestedCount = arrested.length;
+            targetCase.arrestedNames = arrested.map((a) => a.name).join(', ');
+            targetCase.anyPersonArrested = arrested.length > 0;
+
+            targetCase.pendingArrestCount = toArrest.length;
+            targetCase.pendingArrestNames = toArrest.map((a) => a.name).join(', ');
+            targetCase.pendingForArrest = toArrest.length > 0;
+
+            updatedCases[matchedCaseIdx] = targetCase;
+            saveFIRCaseToSupabase(targetCase);
+          }
+        });
+
+        return updatedCases;
+      });
+    }
+
+    // 2. Auto-create FIR cases from daily report registered FIRs
+    if (newReport.registeredFirs && newReport.registeredFirs.length > 0) {
+      newReport.registeredFirs.forEach((f, idx) => {
+        const targetSubdiv = newReport.subdivision || getSubdivisionForPS(newReport.ps);
+        const targetDist = newReport.district || getDistrictForPS(newReport.ps);
+        
+        // Map accused names if any were entered
+        const parsedAccusedList = (f.accusedNames || []).map((name, aIdx) => ({
+          id: `acc-${Date.now()}-${idx}-${aIdx}-${Math.random().toString(36).substring(2, 5)}`,
+          name: name.trim(),
+          status: 'Enquiry' as const,
+        }));
+
+        const newCase: FIRCase = {
+          id: `fir-auto-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 5)}`,
+          firNumber: f.firNumber.trim(),
+          district: targetDist,
+          subdivision: targetSubdiv,
+          ps: newReport.ps,
+          firDate: f.date || newReport.date,
+          sections: f.sections.trim(),
+          crimeHead: 'Other / General IPC & BNS',
+          crimeHeads: ['Other / General IPC & BNS'],
+          punishmentTerm: 'less_than_7_years',
+          complainantName: (f.complainantName || 'Unknown').trim(),
+          complainantPhone: (f.complainantPhone || '').trim(),
+          placeOfOccurrence: (f.placeOfOccurrence || 'Unknown').trim(),
+          ioName: f.ioName,
+          designation: 'PENDING_DESIGNATION',
+          deadlineDays: 60,
+          status: 'Under Investigation',
+          chargesheetUploadedCCTNS: false,
+          caseDiaryUploadedCCTNS: false,
+          psProgressRemarks: 'Registered automatically via Daily Police Station Diary.',
+          accusedList: parsedAccusedList,
+          createdAt: todayStr,
+          updatedAt: todayStr,
+        };
+
+        setCases((prev) => {
+          if (prev.some((c) => c.firNumber.toLowerCase() === newCase.firNumber.toLowerCase() && c.ps.toLowerCase() === newCase.ps.toLowerCase())) {
+            return prev;
+          }
+          saveFIRCaseToSupabase(newCase);
+          return [newCase, ...prev];
+        });
+      });
+    }
 
     // Auto-sync newly recorded departing officers to leave ledger
     if (newReport.leaveLedgerEntries && newReport.leaveLedgerEntries.length > 0) {
@@ -982,18 +1101,95 @@ export default function App() {
       alert('Permission Denied: Your account has view-only access to the leave ledger.');
       return;
     }
-    setLeaveLedger((prev) =>
-      prev.map((item) => {
-        if (item.id === leaveId) {
+    setLeaveLedger((prev) => {
+      const exists = prev.some((item) => item.id === leaveId);
+      if (exists) {
+        return prev.map((item) => {
+          if (item.id === leaveId) {
+            const updated: LeaveLedgerEntry = {
+              ...item,
+              status,
+              actualArrivalDate: status === 'ARRIVED' ? (actualArrivalDate || new Date().toISOString().split('T')[0]) : undefined,
+            };
+            saveLeaveLedgerEntryToSupabase(updated);
+            return updated;
+          }
+          return item;
+        });
+      } else {
+        let foundEntry: LeaveLedgerEntry | undefined;
+        for (const r of dailyReports) {
+          const entry = (r.leaveLedgerEntries || []).find((e) => e.id === leaveId);
+          if (entry) {
+            foundEntry = entry;
+            break;
+          }
+        }
+        if (foundEntry) {
           const updated: LeaveLedgerEntry = {
-            ...item,
+            ...foundEntry,
             status,
             actualArrivalDate: status === 'ARRIVED' ? (actualArrivalDate || new Date().toISOString().split('T')[0]) : undefined,
           };
           saveLeaveLedgerEntryToSupabase(updated);
-          return updated;
+          return [updated, ...prev];
         }
-        return item;
+        return prev;
+      }
+    });
+
+    setDailyReports((prev) =>
+      prev.map((report) => {
+        const hasLeave = (report.leaveLedgerEntries || []).some((e) => e.id === leaveId);
+        if (hasLeave) {
+          const updatedEntries = (report.leaveLedgerEntries || []).map((e) => {
+            if (e.id === leaveId) {
+              return {
+                ...e,
+                status,
+                actualArrivalDate: status === 'ARRIVED' ? (actualArrivalDate || new Date().toISOString().split('T')[0]) : undefined,
+              };
+            }
+            return e;
+          });
+          const updatedReport = {
+            ...report,
+            leaveLedgerEntries: updatedEntries,
+          };
+          saveDailyReportToSupabase(updatedReport);
+          return updatedReport;
+        }
+        return report;
+      })
+    );
+  };
+
+  const handleUpdateLeaveEntry = (updatedEntry: LeaveLedgerEntry) => {
+    if (isReadOnly) {
+      alert('Permission Denied: Your account has view-only access to the leave ledger.');
+      return;
+    }
+    setLeaveLedger((prev) =>
+      prev.map((item) => (item.id === updatedEntry.id ? updatedEntry : item))
+    );
+    saveLeaveLedgerEntryToSupabase(updatedEntry);
+
+    // Also update any reference in daily reports
+    setDailyReports((prev) =>
+      prev.map((report) => {
+        const hasLeave = (report.leaveLedgerEntries || []).some((e) => e.id === updatedEntry.id);
+        if (hasLeave) {
+          const updatedEntries = (report.leaveLedgerEntries || []).map((e) =>
+            e.id === updatedEntry.id ? updatedEntry : e
+          );
+          const updatedReport = {
+            ...report,
+            leaveLedgerEntries: updatedEntries,
+          };
+          saveDailyReportToSupabase(updatedReport);
+          return updatedReport;
+        }
+        return report;
       })
     );
   };
@@ -1014,6 +1210,22 @@ export default function App() {
     }
     setLeaveLedger((prev) => prev.filter((item) => item.id !== leaveId));
     deleteLeaveLedgerEntryFromSupabase(leaveId);
+
+    setDailyReports((prev) =>
+      prev.map((report) => {
+        const hasLeave = (report.leaveLedgerEntries || []).some((e) => e.id === leaveId);
+        if (hasLeave) {
+          const updatedEntries = (report.leaveLedgerEntries || []).filter((e) => e.id !== leaveId);
+          const updatedReport = {
+            ...report,
+            leaveLedgerEntries: updatedEntries,
+          };
+          saveDailyReportToSupabase(updatedReport);
+          return updatedReport;
+        }
+        return report;
+      })
+    );
   };
 
   const handleDeleteDailyReport = (id: string) => {
@@ -1474,6 +1686,7 @@ export default function App() {
             onUpdateLeaveStatus={handleUpdateLeaveStatus}
             onAddLeaveEntry={handleAddLeaveEntry}
             onDeleteLeaveEntry={handleDeleteLeaveEntry}
+            onUpdateLeaveEntry={handleUpdateLeaveEntry}
             currentRole={currentRole}
             availablePoliceStations={policeStations}
             districts={districts}
