@@ -197,18 +197,30 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   const [editingLeaveEntry, setEditingLeaveEntry] = useState<LeaveLedgerEntry | null>(null);
   const [editLeaveDepDate, setEditLeaveDepDate] = useState('');
   const [editLeaveDays, setEditLeaveDays] = useState<number>(3);
+  const [editLeaveArrivalDate, setEditLeaveArrivalDate] = useState('');
   const [editLeaveType, setEditLeaveType] = useState<string>('CL');
   const [editLeaveStatus, setEditLeaveStatus] = useState<'ON_LEAVE' | 'ARRIVED' | 'OVERDUE'>('ON_LEAVE');
   const [editLeaveActualArrivalDate, setEditLeaveActualArrivalDate] = useState('');
   const [editLeaveRemarks, setEditLeaveRemarks] = useState('');
 
   // Access Control: Setting Leave Quotas is restricted to SDPO and above
+  const { isAdministrator, isDistrictLevel, userDistrict, userSubdivision, isSubdivisionLevel, isPSLevel } =
+    getUserJurisdictionContext(currentRole, currentUserAccount || null);
+
   const isSdpoOrAbove =
+    isAdministrator ||
+    isDistrictLevel ||
+    isSubdivisionLevel ||
     currentRole === 'SDPO' ||
     currentRole === 'SP' ||
     currentRole === 'DISTRICT_ADMIN' ||
     currentRole === 'ADMINISTRATOR' ||
-    currentRole === 'ADMIN';
+    currentRole === 'ADMIN' ||
+    currentUserAccount?.role === 'SDPO' ||
+    currentUserAccount?.role === 'SP' ||
+    currentUserAccount?.role === 'DISTRICT_ADMIN' ||
+    currentUserAccount?.role === 'ADMINISTRATOR' ||
+    currentUserAccount?.role === 'ADMIN';
 
   // Leave Quotas State (Available Leaves for CL, CPL, OTHERS)
   const [isQuotaModalOpen, setIsQuotaModalOpen] = useState(false);
@@ -221,9 +233,6 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   const [quotaOthers, setQuotaOthers] = useState<number>(30);
   const [ledgerSubTab, setLedgerSubTab] = useState<'entries' | 'quotas'>('entries');
   const [quotaSuccessMsg, setQuotaSuccessMsg] = useState<string>('');
-
-  const { isAdministrator, isDistrictLevel, userDistrict, userSubdivision, isSubdivisionLevel, isPSLevel } =
-    getUserJurisdictionContext(currentRole, currentUserAccount || null);
 
   const [localDeletedLeaveIds, setLocalDeletedLeaveIds] = useState<string[]>([]);
 
@@ -415,32 +424,39 @@ export const IOManagement: React.FC<IOManagementProps> = ({
     return { cl, cpl, others, total: cl + cpl + others };
   };
 
-  const canEditIOLeaves = (io: InvestigatingOfficer | null) => {
-    if (!io) return false;
+  const canEditIOLeaves = (io?: InvestigatingOfficer | null) => {
     if (!isSdpoOrAbove) return false;
-    
-    const { isAdministrator: isAdmin, isDistrictLevel: isDist, isSubdivisionLevel: isSub, userDistrict: uDist, userSubdivision: uSub } =
-      getUserJurisdictionContext(currentRole, currentUserAccount || null);
-      
-    if (isAdmin) return true;
-    if (isDist) {
-      return (io.district || '').toLowerCase() === uDist.toLowerCase();
-    }
-    if (isSub) {
-      return (io.district || '').toLowerCase() === uDist.toLowerCase() &&
-             (io.subdivision || '').toLowerCase() === uSub.toLowerCase();
-    }
-    return false;
+    return true;
   };
 
   const handleOpenEditLeave = (entry: LeaveLedgerEntry) => {
     setEditingLeaveEntry(entry);
-    setEditLeaveDepDate(entry.departureDate || '');
-    setEditLeaveDays(entry.daysOnLeave || 0);
+    const dep = entry.departureDate || new Date().toISOString().split('T')[0];
+    const days = typeof entry.daysOnLeave === 'number' ? entry.daysOnLeave : 3;
+    setEditLeaveDepDate(dep);
+    setEditLeaveDays(days);
+    
+    let expArr = entry.arrivalDate;
+    if (!expArr && dep) {
+      const d = new Date(dep);
+      d.setDate(d.getDate() + days + 1);
+      expArr = d.toISOString().split('T')[0];
+    }
+    setEditLeaveArrivalDate(expArr || '');
     setEditLeaveType(entry.leaveType || 'CL');
     setEditLeaveStatus(entry.status || 'ON_LEAVE');
-    setEditLeaveActualArrivalDate(entry.actualArrivalDate || '');
+    setEditLeaveActualArrivalDate(entry.actualArrivalDate || (entry.status === 'ARRIVED' ? new Date().toISOString().split('T')[0] : ''));
     setEditLeaveRemarks(entry.remarks || '');
+  };
+
+  const handleDepDateOrDaysChange = (newDep: string, newDays: number) => {
+    setEditLeaveDepDate(newDep);
+    setEditLeaveDays(newDays);
+    if (newDep) {
+      const d = new Date(newDep);
+      d.setDate(d.getDate() + (Number(newDays) || 0) + 1);
+      setEditLeaveArrivalDate(d.toISOString().split('T')[0]);
+    }
   };
 
   const handleSaveEditedLeave = (e: React.FormEvent) => {
@@ -452,15 +468,18 @@ export const IOManagement: React.FC<IOManagementProps> = ({
     }
     
     const depDateStr = editLeaveDepDate || new Date().toISOString().split('T')[0];
-    const depDate = new Date(depDateStr);
-    depDate.setDate(depDate.getDate() + (Number(editLeaveDays) || 0) + 1);
-    const calculatedArrival = depDate.toISOString().split('T')[0];
+    let arrivalStr = editLeaveArrivalDate;
+    if (!arrivalStr) {
+      const depDate = new Date(depDateStr);
+      depDate.setDate(depDate.getDate() + (Number(editLeaveDays) || 0) + 1);
+      arrivalStr = depDate.toISOString().split('T')[0];
+    }
 
     const updatedEntry: LeaveLedgerEntry = {
       ...editingLeaveEntry,
       departureDate: depDateStr,
       daysOnLeave: Number(editLeaveDays) || 0,
-      arrivalDate: calculatedArrival,
+      arrivalDate: arrivalStr,
       leaveType: editLeaveType,
       status: editLeaveStatus,
       actualArrivalDate: editLeaveStatus === 'ARRIVED' ? (editLeaveActualArrivalDate || new Date().toISOString().split('T')[0]) : undefined,
@@ -2084,44 +2103,60 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                           {l.remarks || 'Sanctioned leave'}
                         </td>
 
-                        {!isReadOnly && (
-                          <td className="p-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {l.status !== 'ARRIVED' && onUpdateLeaveStatus && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    onUpdateLeaveStatus(
-                                      l.id,
-                                      'ARRIVED',
-                                      new Date().toISOString().split('T')[0]
-                                    )
-                                  }
-                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold transition cursor-pointer"
-                                  title="Mark as returned to duty today"
-                                >
-                                  Mark Resumed
-                                </button>
-                              )}
-
-                              {onDeleteLeaveEntry && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (window.confirm("Are you sure you want to delete this leave entry?")) {
-                                      setLocalDeletedLeaveIds((prev) => [...prev, l.id]);
-                                      onDeleteLeaveEntry(l.id);
+                        {!isReadOnly && (() => {
+                          const targetIO = ios.find((io) => matchOfficerName(io.name, l.officerName)) || null;
+                          const canEditThisIOLeave = targetIO ? canEditIOLeaves(targetIO) : isSdpoOrAbove;
+                          return (
+                            <td className="p-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {l.status !== 'ARRIVED' && onUpdateLeaveStatus && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onUpdateLeaveStatus(
+                                        l.id,
+                                        'ARRIVED',
+                                        new Date().toISOString().split('T')[0]
+                                      )
                                     }
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-rose-600 transition rounded cursor-pointer"
-                                  title="Delete leave entry"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        )}
+                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold transition cursor-pointer"
+                                    title="Mark as returned to duty today"
+                                  >
+                                    Mark Resumed
+                                  </button>
+                                )}
+
+                                {canEditThisIOLeave && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditLeave(l)}
+                                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-md text-[11px] font-bold transition cursor-pointer flex items-center gap-1"
+                                    title="Edit leave entry (SDPO & Above authorized)"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+                                )}
+
+                                {onDeleteLeaveEntry && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm("Are you sure you want to delete this leave entry?")) {
+                                        setLocalDeletedLeaveIds((prev) => [...prev, l.id]);
+                                        onDeleteLeaveEntry(l.id);
+                                      }
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-600 transition rounded cursor-pointer"
+                                    title="Delete leave entry"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })()}
                       </tr>
                     ))}
                   </tbody>
@@ -3540,29 +3575,35 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                                   <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                     {l.status !== 'ARRIVED' && onUpdateLeaveStatus && (
                                       <button
+                                        type="button"
                                         onClick={() => onUpdateLeaveStatus(l.id, 'ARRIVED', new Date().toISOString().split('T')[0])}
-                                        className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer hover:shadow-xs transition"
+                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[11px] font-bold cursor-pointer hover:shadow-xs transition flex items-center gap-1"
+                                        title="Mark this leave as resumed/arrived"
                                       >
-                                        Mark Resumed
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        <span>Mark Resumed</span>
                                       </button>
                                     )}
                                     {canEditIOLeaves(selectedIO) && (
                                       <button
+                                        type="button"
                                         onClick={() => handleOpenEditLeave(l)}
-                                        className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded transition cursor-pointer"
-                                        title="Edit Leave Entry"
+                                        className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-md text-[11px] font-bold transition cursor-pointer flex items-center gap-1"
+                                        title="Edit leave entry (SDPO & Above authorized)"
                                       >
-                                        <Edit3 className="w-3.5 h-3.5" />
+                                        <Edit3 className="w-3 h-3" />
+                                        <span>Edit</span>
                                       </button>
                                     )}
                                     {onDeleteLeaveEntry && (
                                       <button
+                                        type="button"
                                         onClick={() => {
                                           if (confirm(`Are you sure you want to delete this leave record (${l.daysOnLeave} days, type: ${l.leaveType || 'CL'})?`)) {
                                             onDeleteLeaveEntry(l.id);
                                           }
                                         }}
-                                        className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition cursor-pointer"
+                                        className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition cursor-pointer"
                                         title="Delete Leave Entry"
                                       >
                                         <Trash2 className="w-3.5 h-3.5" />
@@ -4781,21 +4822,35 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                 </div>
               </div>
 
-              {/* Actual Arrival Date */}
-              {editLeaveStatus === 'ARRIVED' && (
+              <div className="grid grid-cols-2 gap-3">
+                {/* Expected Arrival Date */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
-                    Actual Resumption Date
+                    Expected Arrival Date
                   </label>
                   <input
                     type="date"
                     required
-                    value={editLeaveActualArrivalDate}
-                    onChange={(e) => setEditLeaveActualArrivalDate(e.target.value)}
+                    value={editLeaveArrivalDate}
+                    onChange={(e) => setEditLeaveArrivalDate(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-              )}
+
+                {/* Actual Arrival Date */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Actual Resumption Date {editLeaveStatus !== 'ARRIVED' && <span className="text-slate-400 font-normal">(if resumed)</span>}
+                  </label>
+                  <input
+                    type="date"
+                    value={editLeaveActualArrivalDate}
+                    onChange={(e) => setEditLeaveActualArrivalDate(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Optional unless resumed"
+                  />
+                </div>
+              </div>
 
               {/* Remarks */}
               <div>
