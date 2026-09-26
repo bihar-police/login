@@ -16,7 +16,15 @@ import {
 } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { JurisdictionFilterControls } from './JurisdictionFilterControls';
-import { matchesJurisdictionFilter } from '../utils/jurisdictionHelpers';
+import {
+  matchesJurisdictionFilter,
+  getUserJurisdictionContext,
+  getEffectiveDistricts,
+  getSubdivisionsForDistrict,
+  getPoliceStationsForJurisdiction,
+  getDistrictForPS,
+  getSubdivisionForPS,
+} from '../utils/jurisdictionHelpers';
 import {
   UserCheck,
   Plus,
@@ -64,7 +72,7 @@ import {
   SlidersHorizontal,
   Download,
 } from 'lucide-react';
-import { getPSFromRole, getDeadlineInfo, formatReadableDate, normalizeReviewStatus } from '../utils/helpers';
+import { getPSFromRole, getDeadlineInfo, formatReadableDate, normalizeReviewStatus, formatIndianDate, normalizeLeaveType } from '../utils/helpers';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
 import { DailyReportHistoricalRegister } from './DailyReportHistoricalRegister';
 import { extractAllDutyRecords, categorizeDutyTime } from '../utils/dutyHelpers';
@@ -98,6 +106,7 @@ interface IOManagementProps {
   onUpdateLeaveStatus?: (leaveId: string, status: 'ON_LEAVE' | 'ARRIVED' | 'OVERDUE', actualArrivalDate?: string) => void;
   onAddLeaveEntry?: (entry: LeaveLedgerEntry) => void;
   onDeleteLeaveEntry?: (leaveId: string) => void;
+  onUpdateLeaveEntry?: (entry: LeaveLedgerEntry) => void;
   currentRole: UserRole;
   onSelectIOCasesFilter?: (ioName: string) => void;
   onEditCase?: (caseItem: FIRCase) => void;
@@ -120,6 +129,7 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   onUpdateLeaveStatus,
   onAddLeaveEntry,
   onDeleteLeaveEntry,
+  onUpdateLeaveEntry,
   currentRole,
   onSelectIOCasesFilter,
   onEditCase,
@@ -181,6 +191,16 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   const [ioReviewSearch, setIoReviewSearch] = useState('');
   const [isAddLeaveModalOpen, setIsAddLeaveModalOpen] = useState(false);
   const [targetOfficerForLeave, setTargetOfficerForLeave] = useState<InvestigatingOfficer | null>(null);
+  const [viewingReport, setViewingReport] = useState<DailyCrimeReport | null>(null);
+
+  // Editing Leave Record state variables
+  const [editingLeaveEntry, setEditingLeaveEntry] = useState<LeaveLedgerEntry | null>(null);
+  const [editLeaveDepDate, setEditLeaveDepDate] = useState('');
+  const [editLeaveDays, setEditLeaveDays] = useState<number>(3);
+  const [editLeaveType, setEditLeaveType] = useState<string>('CL');
+  const [editLeaveStatus, setEditLeaveStatus] = useState<'ON_LEAVE' | 'ARRIVED' | 'OVERDUE'>('ON_LEAVE');
+  const [editLeaveActualArrivalDate, setEditLeaveActualArrivalDate] = useState('');
+  const [editLeaveRemarks, setEditLeaveRemarks] = useState('');
 
   // Access Control: Setting Leave Quotas is restricted to SDPO and above
   const isSdpoOrAbove =
@@ -202,11 +222,41 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   const [ledgerSubTab, setLedgerSubTab] = useState<'entries' | 'quotas'>('entries');
   const [quotaSuccessMsg, setQuotaSuccessMsg] = useState<string>('');
 
+  const { isAdministrator, isDistrictLevel, userDistrict, userSubdivision, isSubdivisionLevel, isPSLevel } =
+    getUserJurisdictionContext(currentRole, currentUserAccount || null);
+
+  const [localDeletedLeaveIds, setLocalDeletedLeaveIds] = useState<string[]>([]);
+
   // Add IO Form state
   const [addName, setAddName] = useState('');
   const [addRank, setAddRank] = useState<InvestigatingOfficer['rank']>('Sub-Inspector (SI)');
+  const [addDistrict, setAddDistrict] = useState<string>(isAdministrator ? 'Munger' : userDistrict);
+  const [addSubdivision, setAddSubdivision] = useState<string>(isSubdivisionLevel ? userSubdivision : 'Tarapur');
   const [addPs, setAddPs] = useState<PoliceStationName | 'Subdivision HQ'>(activePS || 'Tarapur');
   const [addPhone, setAddPhone] = useState('');
+
+  const addDistrictVal = isAdministrator ? addDistrict : userDistrict;
+  const addSubdivisionVal = isSubdivisionLevel ? userSubdivision : addSubdivision;
+
+  const availableAddSubdivisions = useMemo(() => {
+    return getSubdivisionsForDistrict(addDistrictVal, subdivisions, districts);
+  }, [addDistrictVal, subdivisions, districts]);
+
+  const availableAddStations = useMemo(() => {
+    return getPoliceStationsForJurisdiction(addDistrictVal, addSubdivisionVal, availablePoliceStations);
+  }, [addDistrictVal, addSubdivisionVal, availablePoliceStations]);
+
+  // Keep addPs in sync with available options
+  useEffect(() => {
+    if (activePS) {
+      setAddPs(activePS);
+    } else if (availableAddStations.length > 0) {
+      const match = availableAddStations.find(s => s.name === addPs);
+      if (!match) {
+        setAddPs(availableAddStations[0].name as PoliceStationName);
+      }
+    }
+  }, [availableAddStations, activePS]);
 
   // Edit IO Form state
   const [editName, setEditName] = useState('');
@@ -253,16 +303,22 @@ export const IOManagement: React.FC<IOManagementProps> = ({
 
   // Build unified leaves list from leaveLedger + dailyReports
   const allUnifiedLeaves = useMemo(() => {
-    const list: LeaveLedgerEntry[] = [
-      ...leaveLedger,
-      ...dailyReports.flatMap((r) => r.leaveLedgerEntries || []),
-    ];
     const map = new Map<string, LeaveLedgerEntry>();
-    list.forEach((item) => {
+    
+    // 1. Process daily report leave entries first
+    dailyReports.flatMap((r) => r.leaveLedgerEntries || []).forEach((item) => {
       if (item && item.id) map.set(item.id, item);
     });
-    return Array.from(map.values()).sort((a, b) => (b.departureDate || '').localeCompare(a.departureDate || ''));
-  }, [leaveLedger, dailyReports]);
+    
+    // 2. Process leaveLedger second so they take precedence
+    leaveLedger.forEach((item) => {
+      if (item && item.id) map.set(item.id, item);
+    });
+
+    return Array.from(map.values())
+      .filter((item) => !localDeletedLeaveIds.includes(item.id))
+      .sort((a, b) => (b.departureDate || '').localeCompare(a.departureDate || ''));
+  }, [leaveLedger, dailyReports, localDeletedLeaveIds]);
 
   // Match officer names safely
   const matchOfficerName = (ioName: string, leaveOfficerName: string) => {
@@ -357,6 +413,64 @@ export const IOManagement: React.FC<IOManagementProps> = ({
     });
 
     return { cl, cpl, others, total: cl + cpl + others };
+  };
+
+  const canEditIOLeaves = (io: InvestigatingOfficer | null) => {
+    if (!io) return false;
+    if (!isSdpoOrAbove) return false;
+    
+    const { isAdministrator: isAdmin, isDistrictLevel: isDist, isSubdivisionLevel: isSub, userDistrict: uDist, userSubdivision: uSub } =
+      getUserJurisdictionContext(currentRole, currentUserAccount || null);
+      
+    if (isAdmin) return true;
+    if (isDist) {
+      return (io.district || '').toLowerCase() === uDist.toLowerCase();
+    }
+    if (isSub) {
+      return (io.district || '').toLowerCase() === uDist.toLowerCase() &&
+             (io.subdivision || '').toLowerCase() === uSub.toLowerCase();
+    }
+    return false;
+  };
+
+  const handleOpenEditLeave = (entry: LeaveLedgerEntry) => {
+    setEditingLeaveEntry(entry);
+    setEditLeaveDepDate(entry.departureDate || '');
+    setEditLeaveDays(entry.daysOnLeave || 0);
+    setEditLeaveType(entry.leaveType || 'CL');
+    setEditLeaveStatus(entry.status || 'ON_LEAVE');
+    setEditLeaveActualArrivalDate(entry.actualArrivalDate || '');
+    setEditLeaveRemarks(entry.remarks || '');
+  };
+
+  const handleSaveEditedLeave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLeaveEntry) return;
+    if (isReadOnly) {
+      alert('Permission Denied: Your account has view-only access.');
+      return;
+    }
+    
+    const depDateStr = editLeaveDepDate || new Date().toISOString().split('T')[0];
+    const depDate = new Date(depDateStr);
+    depDate.setDate(depDate.getDate() + (Number(editLeaveDays) || 0) + 1);
+    const calculatedArrival = depDate.toISOString().split('T')[0];
+
+    const updatedEntry: LeaveLedgerEntry = {
+      ...editingLeaveEntry,
+      departureDate: depDateStr,
+      daysOnLeave: Number(editLeaveDays) || 0,
+      arrivalDate: calculatedArrival,
+      leaveType: editLeaveType,
+      status: editLeaveStatus,
+      actualArrivalDate: editLeaveStatus === 'ARRIVED' ? (editLeaveActualArrivalDate || new Date().toISOString().split('T')[0]) : undefined,
+      remarks: editLeaveRemarks,
+    };
+
+    if (onUpdateLeaveEntry) {
+      onUpdateLeaveEntry(updatedEntry);
+    }
+    setEditingLeaveEntry(null);
   };
 
   const handleOpenQuotaModalForIO = (io: InvestigatingOfficer, year?: string) => {
@@ -749,10 +863,20 @@ export const IOManagement: React.FC<IOManagementProps> = ({
     e.preventDefault();
     if (!addName.trim()) return;
 
+    let finalDistrict = addDistrictVal;
+    let finalSubdivision = addSubdivisionVal;
+
+    if (addPs !== 'Subdivision HQ') {
+      finalDistrict = getDistrictForPS(addPs, availablePoliceStations);
+      finalSubdivision = getSubdivisionForPS(addPs, availablePoliceStations);
+    }
+
     onAddIO({
       name: addName.trim(),
       rank: addRank,
       ps: addPs,
+      district: finalDistrict,
+      subdivision: finalSubdivision,
       phone: addPhone.trim() || undefined,
       status: 'ACTIVE',
     });
@@ -1983,7 +2107,12 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                               {onDeleteLeaveEntry && (
                                 <button
                                   type="button"
-                                  onClick={() => onDeleteLeaveEntry(l.id)}
+                                  onClick={() => {
+                                    if (window.confirm("Are you sure you want to delete this leave entry?")) {
+                                      setLocalDeletedLeaveIds((prev) => [...prev, l.id]);
+                                      onDeleteLeaveEntry(l.id);
+                                    }
+                                  }}
                                   className="p-1 text-slate-400 hover:text-rose-600 transition rounded cursor-pointer"
                                   title="Delete leave entry"
                                 >
@@ -2237,7 +2366,7 @@ export const IOManagement: React.FC<IOManagementProps> = ({
           districts={districts}
           subdivisions={subdivisions}
           currentUserAccount={currentUserAccount}
-          onViewReport={() => {}}
+          onViewReport={(report) => setViewingReport(report)}
           onSelectIOForProfile={(ioName) => {
             const found = ios.find(
               (i) =>
@@ -3408,14 +3537,38 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                               </td>
                               {!isReadOnly && (
                                 <td className="p-2.5 text-right">
-                                  {l.status !== 'ARRIVED' && onUpdateLeaveStatus && (
-                                    <button
-                                      onClick={() => onUpdateLeaveStatus(l.id, 'ARRIVED', new Date().toISOString().split('T')[0])}
-                                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold"
-                                    >
-                                      Mark Resumed
-                                    </button>
-                                  )}
+                                  <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                    {l.status !== 'ARRIVED' && onUpdateLeaveStatus && (
+                                      <button
+                                        onClick={() => onUpdateLeaveStatus(l.id, 'ARRIVED', new Date().toISOString().split('T')[0])}
+                                        className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer hover:shadow-xs transition"
+                                      >
+                                        Mark Resumed
+                                      </button>
+                                    )}
+                                    {canEditIOLeaves(selectedIO) && (
+                                      <button
+                                        onClick={() => handleOpenEditLeave(l)}
+                                        className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded transition cursor-pointer"
+                                        title="Edit Leave Entry"
+                                      >
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                    {onDeleteLeaveEntry && (
+                                      <button
+                                        onClick={() => {
+                                          if (confirm(`Are you sure you want to delete this leave record (${l.daysOnLeave} days, type: ${l.leaveType || 'CL'})?`)) {
+                                            onDeleteLeaveEntry(l.id);
+                                          }
+                                        }}
+                                        className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition cursor-pointer"
+                                        title="Delete Leave Entry"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               )}
                             </tr>
@@ -3774,17 +3927,59 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                 </select>
               </div>
 
+              {/* 1. DISTRICT SELECTOR (for Administrator only) */}
+              {isAdministrator && (
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">District *</label>
+                  <select
+                    value={addDistrict}
+                    onChange={(e) => {
+                      setAddDistrict(e.target.value);
+                      setAddSubdivision('ALL');
+                    }}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white"
+                  >
+                    {getEffectiveDistricts(districts).map((d) => (
+                      <option key={d.id || d.name} value={d.name}>
+                        {d.name} District
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* 2. SUBDIVISION SELECTOR (for Administrator & SP) */}
+              {(isAdministrator || isDistrictLevel) && (
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Subdivision *</label>
+                  <select
+                    value={addSubdivision}
+                    onChange={(e) => setAddSubdivision(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white"
+                  >
+                    <option value="ALL">All Subdivisions</option>
+                    {availableAddSubdivisions.map((s) => (
+                      <option key={s.id || s.name} value={s.name}>
+                        {s.name} Subdiv
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* 3. POLICE STATION SELECTOR (with role-restricted options) */}
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Station / Unit Posting *</label>
                 <select
                   value={addPs}
                   onChange={(e) => setAddPs(e.target.value as any)}
                   disabled={Boolean(activePS)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white disabled:opacity-75"
                 >
-                  {stationOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
+                  {!activePS && <option value="Subdivision HQ">Subdivision HQ</option>}
+                  {availableAddStations.map((ps) => (
+                    <option key={ps.id || ps.name} value={ps.name}>
+                      {ps.name} PS
                     </option>
                   ))}
                 </select>
@@ -4241,6 +4436,395 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                 >
                   <Shield className="w-4 h-4" />
                   <span>Sanction & Save Quota (SDPO)</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: View Report Full Breakdown */}
+      {viewingReport && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden my-6 flex flex-col max-h-[90vh]">
+            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-400" />
+                <h3 className="text-base font-bold text-white">
+                  Daily Crime & Patrol Diary — {viewingReport.ps} PS ({viewingReport.date})
+                </h3>
+              </div>
+              <button
+                onClick={() => setViewingReport(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-6 space-y-5 text-xs text-left">
+              {/* Registered FIRs Table */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+                <h4 className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-indigo-500" />
+                  <span>Total FIR Registered Last Day ({viewingReport.firsRegisteredCount})</span>
+                </h4>
+
+                {viewingReport.registeredFirs && viewingReport.registeredFirs.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-400 text-[10px] uppercase font-bold">
+                          <th className="py-1 px-2">FIR No.</th>
+                          <th className="py-1 px-2">Date</th>
+                          <th className="py-1 px-2">Sections</th>
+                          <th className="py-1 px-2">Assigned IO</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200/60 dark:divide-slate-700/60">
+                        {viewingReport.registeredFirs.map((f, i) => (
+                          <tr key={i}>
+                            <td className="py-1.5 px-2 font-bold text-blue-600 dark:text-blue-400">
+                              {f.firNumber}
+                            </td>
+                            <td className="py-1.5 px-2 text-slate-600 dark:text-slate-300">{f.date}</td>
+                            <td className="py-1.5 px-2 font-mono text-slate-800 dark:text-slate-200">
+                              {f.sections}
+                            </td>
+                            <td className="py-1.5 px-2 font-semibold text-slate-700 dark:text-slate-300">
+                              {f.ioName}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-slate-400 italic">No individual FIRs logged.</p>
+                )}
+              </div>
+
+              {/* OD & GASTI Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2">
+                  <h4 className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-500" />
+                    <span>Officer on Duty (3 ODs)</span>
+                  </h4>
+                  <ul className="space-y-1 text-slate-700 dark:text-slate-300">
+                    <li>OD 1: <strong>{viewingReport.odDetails?.od1IoName || '—'}</strong></li>
+                    <li>OD 2: <strong>{viewingReport.odDetails?.od2IoName || '—'}</strong></li>
+                    <li>OD 3: <strong>{viewingReport.odDetails?.od3IoName || '—'}</strong></li>
+                  </ul>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2">
+                  <h4 className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-2">
+                    <Car className="w-4 h-4 text-emerald-500" />
+                    <span>GASTI (Patrol) Shifts</span>
+                  </h4>
+                  <ul className="space-y-1 text-slate-700 dark:text-slate-300">
+                    <li>Morning Gasti: <strong>{viewingReport.gastiDetails?.morningGastiIoName || '—'}</strong></li>
+                    <li>Day Gasti: <strong>{viewingReport.gastiDetails?.dayGastiIoName || '—'}</strong></li>
+                    <li>Night Gasti: <strong>{viewingReport.gastiDetails?.nightGastiIoName || '—'}</strong></li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Arresting Details */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+                <h4 className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-rose-500" />
+                  <span>Arresting Details Last Day (Total: {viewingReport.arrestsCount})</span>
+                </h4>
+
+                {viewingReport.arrestDetails?.caseArrests &&
+                viewingReport.arrestDetails.caseArrests.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {viewingReport.arrestDetails.caseArrests.map((ca, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700"
+                      >
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
+                          {ca.caseNumber}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-rose-600">{ca.arrestCount} Arrested</span>
+                          {ca.isLiquorRelated && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[10px] font-bold">
+                              Liquor Case
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 italic">No case-specific arrests.</p>
+                )}
+
+                <div className="text-[11px] text-slate-500 pt-1">
+                  Other Arrests: <strong>{viewingReport.arrestDetails?.otherArrestsCount || 0}</strong>
+                </div>
+              </div>
+
+              {/* Leave Management Rank-Wise */}
+              {viewingReport.rankStrengths && viewingReport.rankStrengths.length > 0 && (
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+                  <h4 className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-2">
+                    <Users className="w-4 h-4 text-cyan-500" />
+                    <span>Force Strength & Leave Management</span>
+                  </h4>
+                  <table className="w-full text-left text-[11px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-400 font-bold uppercase text-[10px]">
+                        <th className="py-1">Rank</th>
+                        <th className="py-1 text-center">Total</th>
+                        <th className="py-1 text-center">Present</th>
+                        <th className="py-1 text-center">On Leave</th>
+                        <th className="py-1 text-center">Arriving</th>
+                        <th className="py-1 text-center">Departing</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                      {viewingReport.rankStrengths.map((rs) => (
+                        <tr key={rs.rank}>
+                          <td className="py-1 font-bold">{rs.rank}</td>
+                          <td className="py-1 text-center">{rs.totalStrength}</td>
+                          <td className="py-1 text-center font-extrabold text-emerald-600">{rs.present}</td>
+                          <td className="py-1 text-center text-amber-600">{rs.onLeave}</td>
+                          <td className="py-1 text-center">{rs.arrivingToday || '—'}</td>
+                          <td className="py-1 text-center">{rs.departingToday || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Non-Constable Leave Ledger Entries in this Report */}
+              {viewingReport.leaveLedgerEntries && viewingReport.leaveLedgerEntries.length > 0 && (
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-amber-500" />
+                      <span>Departing Officers Leave Registry ({viewingReport.leaveLedgerEntries.length})</span>
+                    </h4>
+                    <span className="text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 font-bold px-2 py-0.5 rounded">
+                      Except Constables
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[11px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-400 font-bold uppercase text-[10px]">
+                          <th className="py-1">Officer</th>
+                          <th className="py-1">Rank</th>
+                          <th className="py-1">Departure</th>
+                          <th className="py-1 text-center">Days</th>
+                          <th className="py-1 font-bold text-emerald-600">Expected Arrival</th>
+                          <th className="py-1">Type / Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                        {viewingReport.leaveLedgerEntries.map((entry) => (
+                          <tr key={entry.id}>
+                            <td className="py-1.5 font-bold text-slate-800 dark:text-slate-200">{entry.officerName}</td>
+                            <td className="py-1.5 text-slate-600 dark:text-slate-400">{entry.rank}</td>
+                            <td className="py-1.5">{formatIndianDate(entry.departureDate)}</td>
+                            <td className="py-1.5 text-center font-bold text-amber-600">{entry.daysOnLeave}d</td>
+                            <td className="py-1.5 font-black text-emerald-600 dark:text-emerald-400">
+                              {formatIndianDate(entry.arrivalDate)}
+                            </td>
+                            <td className="py-1.5 text-slate-600 dark:text-slate-300">
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-[10px] mr-1 border border-slate-200 dark:border-slate-700">
+                                {normalizeLeaveType(entry.leaveType)}
+                              </span>
+                              {entry.remarks ? <span className="text-slate-500 italic text-xs">{entry.remarks}</span> : null}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Seizures and Incidents */}
+              {viewingReport.seizuresSummary && (
+                <div>
+                  <strong className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Major Seizures:
+                  </strong>
+                  <p className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
+                    {viewingReport.seizuresSummary}
+                  </p>
+                </div>
+              )}
+
+              {viewingReport.majorIncidentsNotes && (
+                <div>
+                  <strong className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Major Incidents / Accidents:
+                  </strong>
+                  <p className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
+                    {viewingReport.majorIncidentsNotes}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingReport(null)}
+                className="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold cursor-pointer hover:bg-slate-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Leave Modal */}
+      {editingLeaveEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-indigo-500" />
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    Edit Leave Record
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                    For Officer: <strong className="text-slate-700 dark:text-slate-200">{editingLeaveEntry.officerName}</strong> ({editingLeaveEntry.rank})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingLeaveEntry(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedLeave} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                {/* Departure Date */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Departure Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editLeaveDepDate}
+                    onChange={(e) => setEditLeaveDepDate(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                {/* Days On Leave */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Days on Leave (Consumed)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    max="180"
+                    value={editLeaveDays}
+                    onChange={(e) => setEditLeaveDays(Math.max(1, Number(e.target.value) || 1))}
+                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Leave Type */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Leave Type
+                  </label>
+                  <select
+                    value={editLeaveType}
+                    onChange={(e) => setEditLeaveType(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="CL">Casual Leave (CL)</option>
+                    <option value="CPL">Compensatory Leave (CPL)</option>
+                    <option value="OTHERS">Other (Earned/Medical)</option>
+                  </select>
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Current Status
+                  </label>
+                  <select
+                    value={editLeaveStatus}
+                    onChange={(e) => setEditLeaveStatus(e.target.value as any)}
+                    className="w-full bg-slate-50 dark:bg-slate-855 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="ON_LEAVE">On Leave</option>
+                    <option value="ARRIVED">Resumed (Arrived)</option>
+                    <option value="OVERDUE">Overdue</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Actual Arrival Date */}
+              {editLeaveStatus === 'ARRIVED' && (
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Actual Resumption Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editLeaveActualArrivalDate}
+                    onChange={(e) => setEditLeaveActualArrivalDate(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+
+              {/* Remarks */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+                  Remarks / Purpose
+                </label>
+                <textarea
+                  rows={2}
+                  value={editLeaveRemarks}
+                  onChange={(e) => setEditLeaveRemarks(e.target.value)}
+                  placeholder="Reason or authorization reference..."
+                  className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Footer Actions */}
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setEditingLeaveEntry(null)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 transition text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg cursor-pointer shadow-xs transition text-xs"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>
