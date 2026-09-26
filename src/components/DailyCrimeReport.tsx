@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   DailyCrimeReport,
   PoliceStationName,
@@ -13,6 +13,11 @@ import {
   PoliceSubdivision,
 } from '../types';
 import { formatIndianDate, formatReadableDate, getPSFromRole, normalizeLeaveType } from '../utils/helpers';
+import {
+  getUserJurisdictionContext,
+  matchesJurisdictionFilter,
+} from '../utils/jurisdictionHelpers';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
 import {
   FileText,
   Plus,
@@ -103,7 +108,19 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
   // View Report Details Modal
   const [viewingReport, setViewingReport] = useState<DailyCrimeReport | null>(null);
 
-  const visibleReports = activePS ? reports.filter((r) => r.ps === activePS) : reports;
+  const { isAdministrator, isDistrictLevel, isSubdivisionLevel, userDistrict, userSubdivision } =
+    getUserJurisdictionContext(currentRole, currentUserAccount);
+
+  const [logsDistrict, setLogsDistrict] = useState<string>(isAdministrator ? 'ALL' : userDistrict);
+  const [logsSubdivision, setLogsSubdivision] = useState<string>(isSubdivisionLevel ? userSubdivision : 'ALL');
+  const [logsPS, setLogsPS] = useState<string>(activePS || 'ALL');
+
+  const visibleReports = useMemo(() => {
+    return reports.filter((r) => {
+      if (activePS && r.ps !== activePS) return false;
+      return matchesJurisdictionFilter(r, logsDistrict, logsSubdivision, logsPS, availablePoliceStations);
+    });
+  }, [reports, activePS, logsDistrict, logsSubdivision, logsPS, availablePoliceStations]);
 
   // Unread messages count for badge
   const currentUserId = currentUserAccount?.userId || currentRole;
@@ -331,6 +348,41 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
       {/* Sub-Tab 2: Daily Diary Log Entries */}
       {subTab === 'logs' && (
         <div className="space-y-4">
+          {/* Jurisdiction Command Hierarchy Controls */}
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Jurisdiction Command Hierarchy
+                </span>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Filter daily logs across District, Subdivision & Police Stations based on your role
+                </p>
+              </div>
+            </div>
+            <JurisdictionFilterControls
+              currentRole={currentRole}
+              currentUserAccount={currentUserAccount || null}
+              districts={districts}
+              subdivisions={subdivisions}
+              availablePoliceStations={availablePoliceStations}
+              selectedDistrict={logsDistrict}
+              selectedSubdivision={logsSubdivision}
+              selectedPS={logsPS}
+              onChangeDistrict={(d) => {
+                setLogsDistrict(d);
+                setLogsSubdivision('ALL');
+                setLogsPS('ALL');
+              }}
+              onChangeSubdivision={(s) => {
+                setLogsSubdivision(s);
+                setLogsPS('ALL');
+              }}
+              onChangePS={(p) => setLogsPS(p)}
+            />
+          </div>
+
           {visibleReports.length === 0 ? (
             <div className="bg-white dark:bg-slate-900 p-12 text-center rounded-xl border border-slate-200 dark:border-slate-800">
               <FileText className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
@@ -537,6 +589,7 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
         onClose={() => setIsSubmitModalOpen(false)}
         onSubmit={onAddReport}
         investigatingOfficers={ios}
+        cases={cases}
         defaultPS={activePS}
         isSuperUser={isSuperUser}
         availablePoliceStations={availablePoliceStations}
