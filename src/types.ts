@@ -126,6 +126,12 @@ export interface InvestigatingOfficer {
 
 export type PunishmentTerm = '7_years_or_more' | 'less_than_7_years';
 
+export interface CaseAccused {
+  id: string;
+  name: string;
+  status: string; // Toggled comma-separated list of ('Enquiry' | 'Charge True' | 'Arresting Order' | 'Arrested' | 'Name Removed')
+}
+
 export interface FIRCase {
   id: string;
   firNumber: string; // e.g. "124/2026"
@@ -143,6 +149,8 @@ export interface FIRCase {
   ioName: string; // Selected from IO drop-down
   designation: CaseDesignation; // Decided ONLY by Super User (SDPO)
   designationDate?: string;
+  accusedList?: CaseAccused[];
+  accusedCount?: number; // Total number of accused (including unknown/named)
   deadlineDays: DeadlineCategory; // 60 or 90 days
   
   // Status & Progress
@@ -281,6 +289,12 @@ export interface RegisteredFIRItem {
   date: string;
   sections: string;
   ioName: string;
+  placeOfOccurrence?: string;
+  complainantName?: string;
+  complainantPhone?: string;
+  accusedCount?: number;
+  accusedNames?: string[];
+  accusedInput?: string;
 }
 
 export interface ODShiftItem {
