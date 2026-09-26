@@ -25,6 +25,7 @@ import {
   Building2,
   MapPin,
   ClipboardCheck,
+  PieChart as PieChartIcon,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -117,37 +118,37 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="bg-slate-950/95 dark:bg-slate-950 text-white border-b border-slate-800/80 shadow-xs backdrop-blur-md sticky top-0 z-30">
       {/* Top Header Row */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3.5 pb-2.5">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3.5">
+      <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-6 py-1.5">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           
           {/* Title & Organization Sub-heading */}
-          <div className="flex items-center gap-3">
-            <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-400/25 flex items-center justify-center text-amber-400 shadow-xs ring-1 ring-amber-500/10">
-              <Shield className="w-6 h-6 stroke-[2]" />
+          <div className="flex items-center gap-2">
+            <div className="bg-amber-500/10 p-1.5 rounded-lg border border-amber-400/25 flex items-center justify-center text-amber-400 shadow-xs ring-1 ring-amber-500/10 shrink-0">
+              <Shield className="w-4.5 h-4.5 stroke-[2]" />
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-sky-400" />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-0.5">
+                  <MapPin className="w-2.5 h-2.5 text-sky-400" />
                   {isAdministrator
                     ? 'State Police Headquarters • Supreme Command'
                     : `Police HQ • ${currentDistrictName} District`}
                 </span>
                 {isAdministrator ? (
-                  <span className="text-[10px] font-black text-rose-300 uppercase tracking-wider bg-rose-500/15 px-2 py-0.5 rounded-md border border-rose-500/30">
+                  <span className="text-[9px] font-black text-rose-300 uppercase tracking-wider bg-rose-500/15 px-1.5 py-0.2 rounded border border-rose-500/30">
                     ★ Master Administrator
                   </span>
                 ) : isDistrictLevel ? (
-                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30">
+                  <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wider bg-amber-500/15 px-1.5 py-0.2 rounded border border-amber-500/30">
                     • District Command (SP)
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                  <span className="text-[9px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
                     • {currentSubdivName} Subdivision
                   </span>
                 )}
               </div>
-              <h1 className="text-base sm:text-lg font-extrabold tracking-tight text-white mt-0.5 font-heading">
+              <h1 className="text-xs sm:text-sm font-extrabold tracking-tight text-white leading-tight font-heading">
                 {isAdministrator
                   ? 'State Police Command — Crime & Jurisdictions Directorate'
                   : isDistrictLevel
@@ -160,33 +161,33 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* User Profile, User ID & Role Actions */}
-          <div className="flex flex-wrap items-center gap-2 bg-slate-900/90 dark:bg-slate-900/80 p-1.5 rounded-xl border border-slate-800 shadow-xs">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/90 dark:bg-slate-900/80 p-1 rounded-lg border border-slate-800 shadow-xs">
             
             {/* Supabase Status Button */}
             <button
               type="button"
               onClick={onOpenSupabaseConfig}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1.5 border transition cursor-pointer ${
+              className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold flex items-center gap-1 border transition cursor-pointer ${
                 isSupabaseConfigured()
                   ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-800/80'
                   : 'bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border-amber-800/80'
               }`}
               title="Click to configure Supabase Cloud Database & run diagnostics"
             >
-              <Database className="w-3 h-3 shrink-0 text-emerald-400" />
-              <span>{isSupabaseConfigured() ? 'Cloud Database Active' : 'Local Storage'}</span>
+              <Database className="w-2.5 h-2.5 shrink-0 text-emerald-400" />
+              <span>{isSupabaseConfigured() ? 'Cloud DB Active' : 'Local Storage'}</span>
             </button>
 
             {/* Authenticated Officer Info Badge */}
             {currentUserAccount ? (
-              <div className="flex items-center gap-2 bg-slate-950/90 px-2.5 py-1 rounded-lg border border-slate-800">
-                <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-white">{currentUserAccount.officerName}</span>
-                  <span className="text-[10px] font-mono text-sky-400 bg-sky-950/80 px-1.5 py-0.2 rounded border border-sky-800/80">
+              <div className="flex items-center gap-1.5 bg-slate-950/90 px-2 py-0.5 rounded-md border border-slate-800">
+                <User className="w-3 h-3 text-amber-400 shrink-0" />
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] font-bold text-white">{currentUserAccount.officerName}</span>
+                  <span className="text-[9px] font-mono text-sky-400 bg-sky-950/80 px-1 py-0.2 rounded border border-sky-800/80">
                     ID: {currentUserAccount.userId}
                   </span>
-                  <span className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded border ${
+                  <span className={`text-[8px] font-black uppercase px-1 py-0.2 rounded border ${
                     currentUserAccount.permissionLevel === 'ADMIN' || isDistrictLevel || currentUserAccount.role === 'SDPO'
                       ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                       : currentUserAccount.permissionLevel === 'VIEWER'
@@ -198,9 +199,9 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 px-2">
-                <UserCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-xs text-slate-300 font-semibold">{getRoleDisplayTitle(currentRole)}</span>
+              <div className="flex items-center gap-1 px-1.5">
+                <UserCheck className="w-3 h-3 text-amber-400" />
+                <span className="text-[11px] text-slate-300 font-semibold">{getRoleDisplayTitle(currentRole)}</span>
               </div>
             )}
 
@@ -210,9 +211,9 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onOpenHierarchyModal}
                 title="Manage Districts, Subdivisions & Police Stations"
-                className="bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold text-xs px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+                className="bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold text-[10px] px-2 py-0.5 rounded-md transition flex items-center gap-1 cursor-pointer"
               >
-                <FolderTree className="w-3.5 h-3.5 text-sky-400" />
+                <FolderTree className="w-3 h-3 text-sky-400" />
                 <span className="hidden sm:inline">Hierarchy</span>
               </button>
             )}
@@ -221,9 +222,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenUserManagement}
               title="Manage Officer User IDs & Passwords"
-              className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-[10px] px-2 py-0.5 rounded-md transition flex items-center gap-1 cursor-pointer"
             >
-              <Key className="w-3.5 h-3.5 text-amber-400" />
+              <Key className="w-3 h-3 text-amber-400" />
               <span className="hidden sm:inline">Access Keys</span>
             </button>
 
@@ -231,9 +232,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onLogout}
               title="Logout from portal"
-              className="bg-slate-950 hover:bg-rose-950 text-slate-300 hover:text-rose-300 border border-slate-800 font-bold text-xs px-2.5 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer"
+              className="bg-slate-950 hover:bg-rose-950 text-slate-300 hover:text-rose-300 border border-slate-800 font-bold text-[10px] px-2 py-0.5 rounded-md transition flex items-center gap-1 cursor-pointer"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-3 h-3" />
               <span className="hidden sm:inline">Logout</span>
             </button>
 
@@ -242,37 +243,37 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={onToggleTheme}
                 title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Theme`}
-                className="p-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-amber-300 rounded-lg transition flex items-center justify-center cursor-pointer"
+                className="p-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-amber-300 rounded-md transition flex items-center justify-center cursor-pointer"
               >
                 {theme === 'light' ? (
-                  <Sun className="w-3.5 h-3.5 text-amber-400" />
+                  <Sun className="w-3 h-3 text-amber-400" />
                 ) : (
-                  <Moon className="w-3.5 h-3.5 text-indigo-300" />
+                  <Moon className="w-3 h-3 text-indigo-300" />
                 )}
               </button>
             )}
 
             {/* Quick Action Buttons (Hidden if Read-Only) */}
             {!isReadOnly ? (
-              <div className="flex items-center gap-1.5 ml-auto">
+              <div className="flex items-center gap-1 ml-auto">
                 <button
                   onClick={onOpenNewFIR}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3 py-1 rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-md transition flex items-center gap-1 shadow-xs cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                  <Plus className="w-3 h-3 stroke-[3]" />
                   <span>+ FIR Entry</span>
                 </button>
                 <button
                   onClick={onOpenNewLandDispute}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs px-2.5 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-[10px] px-2 py-0.5 rounded-md transition flex items-center gap-1 cursor-pointer"
                 >
-                  <Scale className="w-3.5 h-3.5 text-amber-300" />
+                  <Scale className="w-3 h-3 text-amber-300" />
                   <span>Land Dispute</span>
                 </button>
               </div>
             ) : (
-              <div className="ml-auto flex items-center gap-1.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-lg text-xs font-bold">
-                <Lock className="w-3 h-3 text-amber-400" />
+              <div className="ml-auto flex items-center gap-1 bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.2 rounded-md text-[10px] font-bold">
+                <Lock className="w-2.5 h-2.5 text-amber-400" />
                 <span>View-Only</span>
               </div>
             )}
@@ -280,22 +281,22 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Operational Status Ticker with District Level Subdivision Switcher */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs bg-slate-900/60 p-1.5 px-2.5 rounded-xl border border-slate-800/80">
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] bg-slate-900/60 py-1 px-2 rounded-lg border border-slate-800/80">
           
           {/* Administrator District & Subdivision Filters */}
           {isAdministrator && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {onSelectDistrict && (
-                <div className="flex items-center gap-1.5 bg-rose-950/60 border border-rose-800/60 px-2 py-0.5 rounded-lg">
-                  <MapPin className="w-3 h-3 text-rose-400 shrink-0" />
-                  <span className="text-[10px] font-bold text-rose-300 whitespace-nowrap">District:</span>
+                <div className="flex items-center gap-1 bg-rose-950/60 border border-rose-800/60 px-1.5 py-0.2 rounded">
+                  <MapPin className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                  <span className="text-[9px] font-bold text-rose-300 whitespace-nowrap">District:</span>
                   <select
                     value={selectedDistrict}
                     onChange={(e) => {
                       onSelectDistrict(e.target.value);
                       if (onSelectSubdivision) onSelectSubdivision('ALL');
                     }}
-                    className="bg-slate-950 text-white text-[11px] font-bold border border-rose-700/60 rounded px-1.5 py-0.2 focus:outline-none cursor-pointer"
+                    className="bg-slate-950 text-white text-[10px] font-bold border border-rose-700/60 rounded px-1 py-0.2 focus:outline-none cursor-pointer"
                   >
                     <option value="ALL">All Districts</option>
                     {districts.map((d) => (
@@ -308,13 +309,13 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {onSelectSubdivision && (
-                <div className="flex items-center gap-1.5 bg-sky-950/60 border border-sky-800/60 px-2 py-0.5 rounded-lg">
-                  <Building2 className="w-3 h-3 text-sky-400 shrink-0" />
-                  <span className="text-[10px] font-bold text-sky-300 whitespace-nowrap">Subdivision:</span>
+                <div className="flex items-center gap-1 bg-sky-950/60 border border-sky-800/60 px-1.5 py-0.2 rounded">
+                  <Building2 className="w-2.5 h-2.5 text-sky-400 shrink-0" />
+                  <span className="text-[9px] font-bold text-sky-300 whitespace-nowrap">Subdivision:</span>
                   <select
                     value={selectedSubdivision}
                     onChange={(e) => onSelectSubdivision(e.target.value)}
-                    className="bg-slate-950 text-white text-[11px] font-bold border border-sky-700/60 rounded px-1.5 py-0.2 focus:outline-none cursor-pointer"
+                    className="bg-slate-950 text-white text-[10px] font-bold border border-sky-700/60 rounded px-1 py-0.2 focus:outline-none cursor-pointer"
                   >
                     <option value="ALL">All Subdivisions</option>
                     {districtSubdivisions.map((s) => (
@@ -330,13 +331,13 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* District Level Subdivision Switcher */}
           {!isAdministrator && isDistrictLevel && onSelectSubdivision && (
-            <div className="flex items-center gap-1.5 bg-sky-950/60 border border-sky-800/60 px-2 py-0.5 rounded-lg">
-              <Building2 className="w-3 h-3 text-sky-400 shrink-0" />
-              <span className="text-[10px] font-bold text-sky-300 whitespace-nowrap">Subdivision:</span>
+            <div className="flex items-center gap-1 bg-sky-950/60 border border-sky-800/60 px-1.5 py-0.2 rounded">
+              <Building2 className="w-2.5 h-2.5 text-sky-400 shrink-0" />
+              <span className="text-[9px] font-bold text-sky-300 whitespace-nowrap">Subdivision:</span>
               <select
                 value={selectedSubdivision}
                 onChange={(e) => onSelectSubdivision(e.target.value)}
-                className="bg-slate-950 text-white text-[11px] font-bold border border-sky-700/60 rounded px-1.5 py-0.2 focus:outline-none cursor-pointer"
+                className="bg-slate-950 text-white text-[10px] font-bold border border-sky-700/60 rounded px-1 py-0.2 focus:outline-none cursor-pointer"
               >
                 <option value="ALL">All Subdivisions</option>
                 {districtSubdivisions.map((s) => (
@@ -350,43 +351,43 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Subdivision Level Locked Jurisdiction Badge */}
           {isSubdivisionLevel && (
-            <div className="flex items-center gap-1.5 bg-indigo-950/60 border border-indigo-800/60 px-2 py-0.5 rounded-lg">
-              <Building2 className="w-3 h-3 text-indigo-400 shrink-0" />
-              <span className="text-[10px] font-bold text-indigo-200">
+            <div className="flex items-center gap-1 bg-indigo-950/60 border border-indigo-800/60 px-1.5 py-0.2 rounded">
+              <Building2 className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
+              <span className="text-[9px] font-bold text-indigo-200">
                 Subdivision: <span className="text-white font-extrabold">{currentSubdivName}</span>
               </span>
             </div>
           )}
 
-          <div className="flex items-center gap-1.5 text-slate-300 font-medium text-[11px]">
+          <div className="flex items-center gap-1 text-slate-300 font-medium text-[10px]">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             <span className="text-slate-400">Officer:</span>
             <strong className="text-white font-semibold">{currentUserAccount?.officerName || getRoleDisplayTitle(currentRole)}</strong>
           </div>
 
-          <div className="h-3 w-px bg-slate-800 hidden sm:block"></div>
+          <div className="h-2.5 w-px bg-slate-800 hidden sm:block"></div>
 
           {overdueCount > 0 ? (
-            <div className="flex items-center gap-1 text-rose-300 font-extrabold bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-800/60 text-[11px]">
-              <AlertTriangle className="w-3 h-3 text-rose-400" />
-              <span><strong>{overdueCount}</strong> Overdue Deadlines</span>
+            <div className="flex items-center gap-1 text-rose-300 font-extrabold bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-800/60 text-[10px]">
+              <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />
+              <span><strong>{overdueCount}</strong> Overdue</span>
             </div>
           ) : (
-            <span className="text-emerald-400 text-[11px] font-semibold flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Deadlines Compliant
+            <span className="text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
+              <CheckCircle2 className="w-2.5 h-2.5" /> Compliant
             </span>
           )}
 
-          <div className="h-3 w-px bg-slate-800 hidden sm:block"></div>
+          <div className="h-2.5 w-px bg-slate-800 hidden sm:block"></div>
 
-          <div className="flex items-center gap-1 text-[11px] text-slate-300">
-            <span className="text-slate-400">Special Reports:</span>
+          <div className="flex items-center gap-1 text-[10px] text-slate-300">
+            <span className="text-slate-400">SR:</span>
             <strong className="text-amber-400 font-bold">{pendingSRCount}</strong>
           </div>
 
-          <div className="h-3 w-px bg-slate-800 hidden sm:block"></div>
+          <div className="h-2.5 w-px bg-slate-800 hidden sm:block"></div>
 
-          <div className="flex items-center gap-1 text-[11px] text-slate-300">
+          <div className="flex items-center gap-1 text-[10px] text-slate-300">
             <span className="text-slate-400">Land Disputes:</span>
             <strong className="text-emerald-400 font-bold">{pendingLandDisputesCount}</strong>
           </div>
@@ -394,44 +395,44 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Clean Modern Navigation Tab Links */}
-      <div className="bg-slate-900/90 dark:bg-slate-950 border-t border-slate-800/80 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex items-center overflow-x-auto scrollbar-none gap-1 py-1.5">
+      <div className="bg-slate-900/90 dark:bg-slate-950 border-t border-slate-800/80 px-3 sm:px-5 lg:px-6">
+        <div className="max-w-7xl mx-auto flex items-center overflow-x-auto scrollbar-none gap-1 py-1">
           <button
             onClick={() => onTabChange('dashboard')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer ${
               activeTab === 'dashboard'
                 ? 'bg-indigo-600/90 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <Shield className="w-3.5 h-3.5 text-amber-400" />
+            <Shield className="w-3 h-3 text-amber-400" />
             <span>Dashboard</span>
           </button>
 
           <button
             onClick={() => onTabChange('firs')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer ${
               activeTab === 'firs'
                 ? 'bg-indigo-600/90 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <FileText className="w-3.5 h-3.5 text-blue-400" />
+            <FileText className="w-3 h-3 text-blue-400" />
             <span>FIR Records</span>
           </button>
 
           <button
             onClick={() => onTabChange('deadlines')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 relative cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 relative cursor-pointer ${
               activeTab === 'deadlines'
                 ? 'bg-indigo-600/90 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+            <ShieldAlert className="w-3 h-3 text-rose-400" />
             <span>Deadline Monitor</span>
             {overdueCount > 0 && (
-              <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 rounded-full">
+              <span className="bg-rose-500 text-white text-[8px] font-black px-1 rounded-full">
                 {overdueCount}
               </span>
             )}
@@ -441,15 +442,15 @@ export const Header: React.FC<HeaderProps> = ({
           {(isSuperUser || currentRole === 'CI') && (
             <button
               onClick={() => onTabChange('supervision')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer ${
                 activeTab === 'supervision'
                   ? 'bg-purple-600/90 text-white shadow-xs'
                   : 'text-purple-300 hover:text-white hover:bg-purple-950/50'
               }`}
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+              <ShieldCheck className="w-3 h-3 text-purple-400" />
               <span>Supervision Status</span>
-              <span className={`text-white text-[9px] font-black px-1.5 py-0.2 rounded-full ${
+              <span className={`text-white text-[8px] font-black px-1 py-0.2 rounded-full ${
                 currentRole === 'CI' ? 'bg-blue-600' : 'bg-purple-700'
               }`}>
                 {currentRole === 'CI' ? 'NON-SR' : 'SR'}
@@ -460,83 +461,98 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Case Review & Parameters Tab */}
           <button
             onClick={() => onTabChange('case_review')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer ${
               activeTab === 'case_review'
                 ? 'bg-indigo-600/90 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <ClipboardCheck className="w-3.5 h-3.5 text-purple-400" />
+            <ClipboardCheck className="w-3 h-3 text-purple-400" />
             <span>Case Review & Register</span>
-            <span className="bg-purple-500/30 text-purple-200 border border-purple-400/30 text-[9px] font-black px-1.5 py-0.2 rounded-full">
+            <span className="bg-purple-500/30 text-purple-200 border border-purple-400/30 text-[8px] font-black px-1 py-0.2 rounded-full">
               New
             </span>
           </button>
 
           <button
             onClick={() => onTabChange('land_disputes')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer ${
               activeTab === 'land_disputes'
                 ? 'bg-indigo-600/90 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <Scale className="w-3.5 h-3.5 text-emerald-400" />
+            <Scale className="w-3 h-3 text-emerald-400" />
             <span>Land Disputes</span>
           </button>
 
           <button
             onClick={() => onTabChange('ud_cases')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer ${
               activeTab === 'ud_cases'
                 ? 'bg-indigo-600/90 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <Shield className="w-3.5 h-3.5 text-sky-400" />
+            <Shield className="w-3 h-3 text-sky-400" />
             <span>UD & NON-SR Desk</span>
           </button>
 
           <button
             onClick={() => onTabChange('ios')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer ${
               activeTab === 'ios'
                 ? 'bg-indigo-600/90 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <UserCheck className="w-3.5 h-3.5 text-indigo-300" />
+            <UserCheck className="w-3 h-3 text-indigo-300" />
             <span>IO Management</span>
           </button>
 
           <button
             onClick={() => onTabChange('daily_reports')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 relative cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 relative cursor-pointer ${
               activeTab === 'daily_reports'
                 ? 'bg-indigo-600/90 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <FileText className="w-3.5 h-3.5 text-purple-300" />
+            <FileText className="w-3 h-3 text-purple-300" />
             <span>Daily Reports</span>
             {unreadMessagesCount > 0 && (
-              <span className="bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+              <span className="bg-rose-600 text-white text-[8px] font-black px-1 py-0.2 rounded-full">
                 {unreadMessagesCount}
               </span>
             )}
           </button>
 
           <button
+            onClick={() => onTabChange('analytics_graphs')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer ${
+              activeTab === 'analytics_graphs'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <PieChartIcon className="w-3 h-3 text-indigo-400" />
+            <span>Comparison Graphs</span>
+            <span className="px-1 py-0.2 text-[8px] uppercase font-black bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 rounded-full">
+              Pie
+            </span>
+          </button>
+
+          <button
             onClick={() => onTabChange('ai_assistant')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 relative cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 relative cursor-pointer ${
               activeTab === 'ai_assistant'
                 ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs'
                 : 'text-purple-300 hover:text-purple-100 hover:bg-purple-950/50'
             }`}
           >
-            <Bot className="w-3.5 h-3.5 text-purple-400" />
+            <Bot className="w-3 h-3 text-purple-400" />
             <span>AI Assistant</span>
-            <span className="px-1.5 py-0.2 text-[8px] uppercase font-black bg-purple-500/20 text-purple-200 border border-purple-400/30 rounded-full">
+            <span className="px-1 py-0.2 text-[8px] uppercase font-black bg-purple-500/20 text-purple-200 border border-purple-400/30 rounded-full">
               Gemini
             </span>
           </button>
