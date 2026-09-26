@@ -17,6 +17,7 @@ import {
   PoliceSubdivision,
   UserRole,
   UserAccount,
+  FIRCase,
 } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { getUserJurisdictionContext, getPoliceStationsForJurisdiction } from '../utils/jurisdictionHelpers';
@@ -46,6 +47,7 @@ interface DailyReportSubmitModalProps {
   onClose: () => void;
   onSubmit: (reportData: Omit<DailyCrimeReport, 'id'>) => void;
   investigatingOfficers: InvestigatingOfficer[];
+  cases?: FIRCase[];
   defaultPS?: PoliceStationName | null;
   isSuperUser?: boolean;
   availablePoliceStations?: PoliceStation[];
@@ -67,6 +69,7 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
   onClose,
   onSubmit,
   investigatingOfficers,
+  cases = [],
   defaultPS,
   isSuperUser = false,
   availablePoliceStations,
@@ -77,6 +80,8 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
 }) => {
   const { isAdministrator, isDistrictLevel, userDistrict, userSubdivision, isSubdivisionLevel } =
     getUserJurisdictionContext(currentRole, currentUserAccount);
+
+  const modalIsSuperUser = isSuperUser || isAdministrator || isDistrictLevel || isSubdivisionLevel;
 
   const [selectedDistrict, setSelectedDistrict] = useState<string>(isAdministrator ? 'ALL' : userDistrict);
   const [selectedSubdivision, setSelectedSubdivision] = useState<string>(isSubdivisionLevel ? userSubdivision : 'ALL');
@@ -125,9 +130,20 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
     { shiftName: 'Night Gasti / Nakabandi', timeSlot: '22:00 - 06:00', ioName: '', sectorArea: 'Sensitive Naka Points & Rural Patrol', vehicleNumber: '', forceCount: 4, remarks: '' },
   ]);
 
+interface EnhancedCaseArrestItem {
+  caseId?: string;
+  caseNumber: string;
+  arrestCount: number;
+  isLiquorRelated: boolean;
+  arrestedAccusedNames?: string[];
+  manualAccusedNames?: string[];
+}
+
   // 4. Arresting details of last day
-  const [caseArrests, setCaseArrests] = useState<CaseArrestItem[]>([]);
+  const [caseArrests, setCaseArrests] = useState<EnhancedCaseArrestItem[]>([]);
   const [otherArrestsCount, setOtherArrestsCount] = useState<number>(0);
+  const [manualInputs, setManualInputs] = useState<Record<number, string>>({});
+  const [firAccusedInputs, setFirAccusedInputs] = useState<Record<number, string>>({});
 
   // 5. Leave Management (Rank-Wise)
   const [rankStrengths, setRankStrengths] = useState<RankStrengthDetails[]>([
@@ -170,6 +186,11 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
         date: todayStr,
         sections: '',
         ioName: psOfficers[0]?.name || '',
+        placeOfOccurrence: '',
+        complainantName: '',
+        complainantPhone: '',
+        accusedCount: 0,
+        accusedNames: [],
       },
     ]);
   };
@@ -178,10 +199,40 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
     setRegisteredFirs((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleUpdateFIRRow = (index: number, field: keyof RegisteredFIRItem, val: string) => {
+  const handleUpdateFIRRow = (index: number, field: keyof RegisteredFIRItem, val: any) => {
     setRegisteredFirs((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: val };
+      return next;
+    });
+  };
+
+  const handleAddAccusedToFIR = (idx: number, accusedName: string) => {
+    if (!accusedName.trim()) return;
+    setRegisteredFirs((prev) => {
+      const next = [...prev];
+      const currentNames = next[idx].accusedNames || [];
+      if (!currentNames.includes(accusedName.trim())) {
+        const updatedNames = [...currentNames, accusedName.trim()];
+        next[idx] = {
+          ...next[idx],
+          accusedNames: updatedNames,
+          accusedCount: Math.max(next[idx].accusedCount || 0, updatedNames.length),
+        };
+      }
+      return next;
+    });
+  };
+
+  const handleRemoveAccusedFromFIR = (firIdx: number, accusedName: string) => {
+    setRegisteredFirs((prev) => {
+      const next = [...prev];
+      const updatedNames = (next[firIdx].accusedNames || []).filter((name) => name !== accusedName);
+      next[firIdx] = {
+        ...next[firIdx],
+        accusedNames: updatedNames,
+        accusedCount: Math.max(next[firIdx].accusedCount || 0, updatedNames.length),
+      };
       return next;
     });
   };
@@ -191,9 +242,12 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
     setCaseArrests((prev) => [
       ...prev,
       {
+        caseId: '',
         caseNumber: '',
-        arrestCount: 1,
+        arrestCount: 0,
         isLiquorRelated: false,
+        arrestedAccusedNames: [],
+        manualAccusedNames: [],
       },
     ]);
   };
@@ -204,8 +258,8 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
 
   const handleUpdateCaseArrestRow = (
     index: number,
-    field: keyof CaseArrestItem,
-    val: string | number | boolean
+    field: keyof EnhancedCaseArrestItem,
+    val: any
   ) => {
     setCaseArrests((prev) => {
       const next = [...prev];
@@ -446,7 +500,7 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
           {/* Station, Date, Officer metadata */}
           <div className="space-y-4 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80">
             {/* If superuser, show cascading District & Subdivision filters to restrict PS options */}
-            {(isAdministrator || isDistrictLevel) && (
+            {modalIsSuperUser && (
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-700">
                 <div>
                   <span className="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider block">
@@ -489,7 +543,7 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
                     setPs(newPS);
                     setSubmittedBy(`SHO ${newPS} PS`);
                   }}
-                  disabled={!isSuperUser && Boolean(defaultPS)}
+                  disabled={!modalIsSuperUser && Boolean(defaultPS)}
                   className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-slate-900 dark:text-white disabled:opacity-75"
                 >
                   {psOptions.map((st) => (
@@ -559,81 +613,211 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
                 <span>No FIRs registered yesterday. Click "Add More FIR" if any cases were lodged.</span>
               </div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-4">
                 {registeredFirs.map((fir, idx) => (
                   <div
                     key={idx}
-                    className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200/80 dark:border-slate-700/80"
+                    className="p-4 bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-4 shadow-sm"
                   >
-                    <div className="sm:col-span-3">
-                      <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                        FIR No. *
-                      </label>
-                      <input
-                        type="text"
-                        value={fir.firNumber}
-                        onChange={(e) => handleUpdateFIRRow(idx, 'firNumber', e.target.value)}
-                        placeholder="e.g. 104/2025"
-                        required
-                        className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-bold"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                        FIR Date *
-                      </label>
-                      <input
-                        type="date"
-                        value={fir.date}
-                        onChange={(e) => handleUpdateFIRRow(idx, 'date', e.target.value)}
-                        required
-                        className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-3">
-                      <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                        Sections *
-                      </label>
-                      <input
-                        type="text"
-                        value={fir.sections}
-                        onChange={(e) => handleUpdateFIRRow(idx, 'sections', e.target.value)}
-                        placeholder="e.g. 379/411 IPC"
-                        required
-                        className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-3">
-                      <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                        Investigating Officer (IO) *
-                      </label>
-                      <select
-                        value={fir.ioName}
-                        onChange={(e) => handleUpdateFIRRow(idx, 'ioName', e.target.value)}
-                        required
-                        className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
-                      >
-                        <option value="">Select {ps} PS Officer...</option>
-                        {psOfficers.map((io) => (
-                          <option key={io.id} value={io.name}>
-                            {io.name} ({io.rank})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-1 flex justify-end">
+                    {/* Header Row */}
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700/60">
+                      <span className="font-extrabold text-slate-900 dark:text-slate-100 text-xs">
+                        FIR Record Details #{idx + 1}
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleRemoveFIRRow(idx)}
-                        className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition mt-4 sm:mt-0"
+                        className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded transition flex items-center gap-1 font-bold text-[10px]"
                         title="Remove FIR"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove FIR</span>
                       </button>
+                    </div>
+
+                    {/* Field Grid 1: Basic FIR Info */}
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+                          FIR No. *
+                        </label>
+                        <input
+                          type="text"
+                          value={fir.firNumber}
+                          onChange={(e) => handleUpdateFIRRow(idx, 'firNumber', e.target.value)}
+                          placeholder="e.g. 104/2025"
+                          required
+                          className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+                          FIR Date *
+                        </label>
+                        <input
+                          type="date"
+                          value={fir.date}
+                          onChange={(e) => handleUpdateFIRRow(idx, 'date', e.target.value)}
+                          required
+                          className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+                          Sections *
+                        </label>
+                        <input
+                          type="text"
+                          value={fir.sections}
+                          onChange={(e) => handleUpdateFIRRow(idx, 'sections', e.target.value)}
+                          placeholder="e.g. 379/411 IPC"
+                          required
+                          className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+                          Investigating Officer (IO) *
+                        </label>
+                        <select
+                          value={fir.ioName}
+                          onChange={(e) => handleUpdateFIRRow(idx, 'ioName', e.target.value)}
+                          required
+                          className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
+                        >
+                          <option value="">Select {ps} PS Officer...</option>
+                          {psOfficers.map((io) => (
+                            <option key={io.id} value={io.name}>
+                              {io.name} ({io.rank})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Field Grid 2: Circumstantial details */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+                          Place of Occurrence *
+                        </label>
+                        <input
+                          type="text"
+                          value={fir.placeOfOccurrence || ''}
+                          onChange={(e) => handleUpdateFIRRow(idx, 'placeOfOccurrence', e.target.value)}
+                          placeholder="e.g. Tarapur Village Chowk"
+                          required
+                          className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+                          Complainant Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={fir.complainantName || ''}
+                          onChange={(e) => handleUpdateFIRRow(idx, 'complainantName', e.target.value)}
+                          placeholder="Complainant Name"
+                          required
+                          className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+                          Complainant Mob No
+                        </label>
+                        <input
+                          type="text"
+                          value={fir.complainantPhone || ''}
+                          onChange={(e) => handleUpdateFIRRow(idx, 'complainantPhone', e.target.value)}
+                          placeholder="e.g. +91 9988776655"
+                          className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Field Grid 3: Accused and Supervision Details */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 pt-1 items-start text-xs">
+                      <div className="sm:col-span-3">
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                          No of Accused *
+                        </label>
+                        <input
+                          type="number"
+                          min={(fir.accusedNames || []).length}
+                          value={fir.accusedCount || 0}
+                          onChange={(e) => handleUpdateFIRRow(idx, 'accusedCount', Math.max((fir.accusedNames || []).length, Number(e.target.value) || 0))}
+                          required
+                          className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-bold"
+                        />
+                        <p className="text-[9px] text-slate-400 mt-1 italic">
+                          Can be higher than added names if some are unknown.
+                        </p>
+                      </div>
+
+                      <div className="sm:col-span-9 space-y-1.5">
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wide">
+                          Add Accused Person Name
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={fir.accusedInput || ''}
+                            onChange={(e) => handleUpdateFIRRow(idx, 'accusedInput', e.target.value)}
+                            placeholder="Type name (e.g. Pappu Singh) and press Enter or Add"
+                            className="flex-1 p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-xs font-semibold"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddAccusedToFIR(idx, fir.accusedInput || '');
+                                handleUpdateFIRRow(idx, 'accusedInput', '');
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleAddAccusedToFIR(idx, fir.accusedInput || '');
+                              handleUpdateFIRRow(idx, 'accusedInput', '');
+                            }}
+                            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-[10px] transition shrink-0 cursor-pointer shadow-xs"
+                          >
+                            Add Accused
+                          </button>
+                        </div>
+
+                        {/* List of Accused added for this FIR */}
+                        <div>
+                          {(fir.accusedNames || []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+                              {(fir.accusedNames || []).map((name) => (
+                                <span
+                                  key={name}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                                >
+                                  <span>{name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveAccusedFromFIR(idx, name)}
+                                    className="text-rose-500 hover:text-rose-700 font-extrabold cursor-pointer"
+                                    title={`Remove ${name}`}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-slate-400 italic">No named accused added yet. (Case registered against unknown person/persons)</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -874,70 +1058,233 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
                 No case-specific arrests registered yesterday. Click "Add Case Arrest" if any arrests were made in cases.
               </div>
             ) : (
-              <div className="space-y-2">
-                {caseArrests.map((ca, idx) => (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700"
-                  >
-                    <div className="sm:col-span-5">
-                      <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                        Case No. *
-                      </label>
-                      <input
-                        type="text"
-                        value={ca.caseNumber}
-                        onChange={(e) => handleUpdateCaseArrestRow(idx, 'caseNumber', e.target.value)}
-                        placeholder="e.g. Tarapur PS Case No. 89/2025"
-                        required
-                        className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-bold"
-                      />
-                    </div>
+              <div className="space-y-3">
+                {caseArrests.map((ca, idx) => {
+                  // Filter cases for the selected PS
+                  const activePsCases = cases.filter(
+                    (c) => c.ps.toLowerCase() === ps.toLowerCase()
+                  );
 
-                    <div className="sm:col-span-3">
-                      <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                        No. of Arresting *
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={ca.arrestCount}
-                        onChange={(e) =>
-                          handleUpdateCaseArrestRow(idx, 'arrestCount', parseInt(e.target.value) || 0)
-                        }
-                        required
-                        className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-bold"
-                      />
-                    </div>
+                  const selectedCaseObj = cases.find((c) => c.id === ca.caseId);
 
-                    <div className="sm:col-span-3 flex items-center pt-3.5">
-                      <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 dark:text-slate-200 select-none">
-                        <input
-                          type="checkbox"
-                          checked={ca.isLiquorRelated}
-                          onChange={(e) =>
-                            handleUpdateCaseArrestRow(idx, 'isLiquorRelated', e.target.checked)
-                          }
-                          className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4"
-                        />
-                        <span className="text-[11px] text-amber-700 dark:text-amber-400 font-bold">
-                          Liquor Related Case?
+                  const handleCaseSelect = (caseId: string) => {
+                    const matched = cases.find((c) => c.id === caseId);
+                    if (matched) {
+                      handleUpdateCaseArrestRow(idx, 'caseId', caseId);
+                      handleUpdateCaseArrestRow(idx, 'caseNumber', `${matched.ps} PS Case No. ${matched.firNumber}`);
+                      handleUpdateCaseArrestRow(idx, 'isLiquorRelated', Boolean(matched.isLiquorCase));
+                      handleUpdateCaseArrestRow(idx, 'arrestedAccusedNames', []);
+                      handleUpdateCaseArrestRow(idx, 'manualAccusedNames', []);
+                      handleUpdateCaseArrestRow(idx, 'arrestCount', 0);
+                    } else {
+                      handleUpdateCaseArrestRow(idx, 'caseId', '');
+                    }
+                  };
+
+                  const handleCheckboxToggle = (accusedName: string, checked: boolean) => {
+                    const currentNames = ca.arrestedAccusedNames || [];
+                    let nextNames: string[];
+                    if (checked) {
+                      nextNames = [...currentNames, accusedName];
+                    } else {
+                      nextNames = currentNames.filter((n) => n !== accusedName);
+                    }
+                    handleUpdateCaseArrestRow(idx, 'arrestedAccusedNames', nextNames);
+                    handleUpdateCaseArrestRow(idx, 'arrestCount', nextNames.length + (ca.manualAccusedNames || []).length);
+                  };
+
+                  const handleAddManualName = () => {
+                    const inputVal = manualInputs[idx] || '';
+                    if (!inputVal.trim()) return;
+                    const manualNames = ca.manualAccusedNames || [];
+                    if (manualNames.includes(inputVal.trim())) {
+                      alert('Name already added manually.');
+                      return;
+                    }
+                    const nextManual = [...manualNames, inputVal.trim()];
+                    handleUpdateCaseArrestRow(idx, 'manualAccusedNames', nextManual);
+                    handleUpdateCaseArrestRow(idx, 'arrestCount', (ca.arrestedAccusedNames || []).length + nextManual.length);
+                    setManualInputs((prev) => ({ ...prev, [idx]: '' }));
+                  };
+
+                  const handleRemoveManualName = (name: string) => {
+                    const nextManual = (ca.manualAccusedNames || []).filter((n) => n !== name);
+                    handleUpdateCaseArrestRow(idx, 'manualAccusedNames', nextManual);
+                    handleUpdateCaseArrestRow(idx, 'arrestCount', (ca.arrestedAccusedNames || []).length + nextManual.length);
+                  };
+
+                  return (
+                    <div
+                      key={idx}
+                      className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-3"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                        {/* Select Case Dropdown */}
+                        <div className="md:col-span-5">
+                          <label className="block text-[10px] font-bold text-slate-400 mb-0.5 uppercase tracking-wide">
+                            Select Case Record *
+                          </label>
+                          <select
+                            value={ca.caseId || ''}
+                            onChange={(e) => handleCaseSelect(e.target.value)}
+                            required
+                            className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold"
+                          >
+                            <option value="">-- Choose Case from {ps} PS --</option>
+                            {activePsCases.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                FIR {c.firNumber} — {c.crimeHead || 'Other'} ({c.sections})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Case Number Display (Fallback for manually selected cases if necessary) */}
+                        <div className="md:col-span-3">
+                          <label className="block text-[10px] font-bold text-slate-400 mb-0.5 uppercase tracking-wide">
+                            Case Reference Number
+                          </label>
+                          <input
+                            type="text"
+                            value={ca.caseNumber}
+                            onChange={(e) => handleUpdateCaseArrestRow(idx, 'caseNumber', e.target.value)}
+                            placeholder="Mapped automatically"
+                            required
+                            className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold"
+                          />
+                        </div>
+
+                        {/* Liquor Related Checkbox */}
+                        <div className="md:col-span-3 flex items-center pt-3.5">
+                          <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 dark:text-slate-200 select-none">
+                            <input
+                              type="checkbox"
+                              checked={ca.isLiquorRelated}
+                              onChange={(e) =>
+                                handleUpdateCaseArrestRow(idx, 'isLiquorRelated', e.target.checked)
+                              }
+                              className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4"
+                            />
+                            <span className="text-[11px] text-amber-700 dark:text-amber-400 font-bold">
+                              Liquor Related Case?
+                            </span>
+                          </label>
+                        </div>
+
+                        {/* Remove Row Button */}
+                        <div className="md:col-span-1 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCaseArrestRow(idx)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-950 rounded-lg transition"
+                            title="Remove Case Arrest Row"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Interactive Section if Case Object Is Selected */}
+                      {selectedCaseObj && (
+                        <div className="bg-white dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3.5 animate-fadeIn">
+                          {/* Case Accused Checkbox List */}
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">
+                              Select Arrested Accused (from Case Supervision list):
+                            </span>
+                            {selectedCaseObj.accusedList && selectedCaseObj.accusedList.filter(accused => accused.status !== 'Arrested').length > 0 ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                                {selectedCaseObj.accusedList.filter(accused => accused.status !== 'Arrested').map((accused) => {
+                                  const isArrested = (ca.arrestedAccusedNames || []).includes(accused.name);
+                                  return (
+                                    <label
+                                      key={accused.id}
+                                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer select-none transition ${
+                                        isArrested
+                                          ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-bold'
+                                          : 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isArrested}
+                                        onChange={(e) => handleCheckboxToggle(accused.name, e.target.checked)}
+                                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                                      />
+                                      <div className="truncate flex-1">
+                                        <div className="truncate text-xs">{accused.name}</div>
+                                        <div className="text-[9px] text-slate-400 font-medium">Status: {accused.status}</div>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-slate-400 italic">
+                                No pending accused remaining to be arrested in this case's database. All registered accused are already arrested, or you can add new arrested person manually below.
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Manual Accused Name Addition */}
+                          <div className="space-y-2 border-t border-slate-100 dark:border-slate-800/80 pt-2.5">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">
+                              Or Add Arrested Person manually (automatically updates case records):
+                            </span>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={manualInputs[idx] || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setManualInputs((prev) => ({ ...prev, [idx]: val }));
+                                }}
+                                placeholder="Enter name of arrested person..."
+                                className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-900 dark:text-white"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleAddManualName}
+                                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[11px] transition shadow-xs cursor-pointer"
+                              >
+                                Add Name
+                              </button>
+                            </div>
+
+                            {/* Display Manual Names */}
+                            {ca.manualAccusedNames && ca.manualAccusedNames.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {ca.manualAccusedNames.map((name) => (
+                                  <span
+                                    key={name}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900 rounded-lg font-bold"
+                                  >
+                                    <span>{name} (Manual)</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveManualName(name)}
+                                      className="text-rose-500 hover:text-rose-700 font-bold"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Display Row Arrest Count Summaries */}
+                      <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-500 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                        <span>Accused Arrest Count for Row:</span>
+                        <span className="text-rose-600 dark:text-rose-400 font-black text-xs">
+                          {ca.arrestCount} Arrested
                         </span>
-                      </label>
+                      </div>
                     </div>
-
-                    <div className="sm:col-span-1 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCaseArrestRow(idx)}
-                        className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition"
-                        title="Remove Arrest"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
