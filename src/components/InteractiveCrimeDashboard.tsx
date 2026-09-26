@@ -74,9 +74,12 @@ import {
   BookOpen,
   Download,
   Info,
+  Compass,
+  Database,
 } from 'lucide-react';
 import { exportToExcel } from '../utils/reportExport';
 import { CustomReportGenerator } from './CustomReportGenerator';
+import { UnifiedAnalyticsGraphs } from './UnifiedAnalyticsGraphs';
 
 interface InteractiveCrimeDashboardProps {
   cases: FIRCase[];
@@ -99,7 +102,16 @@ interface InteractiveCrimeDashboardProps {
 }
 
 type TimeRangeFilter = 'ALL' | 'THIS_MONTH' | 'LAST_30_DAYS' | 'LAST_3_MONTHS' | 'YEAR_2026' | 'YEAR_2025' | 'YEAR_2024' | 'CUSTOM';
-type ActiveViewTab = 'CRIME_HEADS' | 'DISTRICT_COMPARISON' | 'SUBDIV_COMPARISON' | 'PS_COMPARISON' | 'IO_PERFORMANCE' | 'STATUTORY_MATRIX' | 'GENERATE_REPORT' | 'STATION_ANALYSIS';
+type ActiveViewTab =
+  | 'CRIME_HEADS'
+  | 'COMPARATIVE_GRAPHS'
+  | 'DISTRICT_COMPARISON'
+  | 'SUBDIV_COMPARISON'
+  | 'PS_COMPARISON'
+  | 'IO_PERFORMANCE'
+  | 'STATUTORY_MATRIX'
+  | 'GENERATE_REPORT'
+  | 'STATION_ANALYSIS';
 
 export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps> = ({
   cases,
@@ -923,6 +935,20 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
             >
               <Award className="w-4 h-4 text-amber-500" />
               <span>IO Performance & Duty</span>
+            </button>
+
+            {/* Tab: Unified Pie & Comparison Graphs */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('COMPARATIVE_GRAPHS')}
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'COMPARATIVE_GRAPHS'
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 text-indigo-400" />
+              <span>📊 Pie & Comparison Graphs</span>
             </button>
 
             {/* Tab: Statutory BNS / IPC / BNSS Mapping Matrix */}
@@ -2508,6 +2534,23 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: UNIFIED ANALYTICS & PIE / BAR COMPARATIVE GRAPHS */}
+      {/* ========================================================================= */}
+      {activeTab === 'COMPARATIVE_GRAPHS' && (
+        <UnifiedAnalyticsGraphs
+          cases={filteredCases}
+          ios={ios}
+          dailyReports={dailyReports}
+          availablePoliceStations={scopedPoliceStations}
+          currentRole={currentRole}
+          activePS={activeRolePS}
+          onViewCase={onViewCase}
+          onApplyFilter={onApplyFilter}
+          onTabChange={onTabChange}
+        />
       )}
 
       {/* ========================================================================= */}
