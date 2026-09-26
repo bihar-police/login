@@ -1126,7 +1126,7 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
         </div>
 
         {/* Date Range Filters Section */}
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 bg-slate-50/70 dark:bg-slate-800/30 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800">
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-50/70 dark:bg-slate-800/30 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800">
           
           {/* FIR Registration Date Range */}
           <div>
@@ -1574,6 +1574,64 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
                     <span className="text-[10px] uppercase font-bold text-slate-400 block">Investigating Officer (IO)</span>
                     <p className="font-extrabold text-amber-600 dark:text-amber-400">{c.ioName}</p>
                   </div>
+                </div>
+
+                {/* Accused Supervision Details inside the card */}
+                <div className="p-3 bg-indigo-50/20 dark:bg-indigo-950/10 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px] block">
+                      Accused Under Supervision (Total: {c.accusedCount || c.accusedList?.length || 0})
+                    </span>
+                    <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-500">
+                      <span>Arrested: <strong className="text-emerald-600 dark:text-emerald-400">{c.arrestedCount || 0}</strong></span>
+                      <span>•</span>
+                      <span>Pending Arrest: <strong className="text-rose-500 dark:text-rose-400">{c.pendingArrestCount || 0}</strong></span>
+                    </div>
+                  </div>
+
+                  {c.accusedList && c.accusedList.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {c.accusedList.map((a) => {
+                        const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : ['Enquiry'];
+                        return (
+                          <div
+                            key={a.id}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px]"
+                          >
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200">{a.name}</span>
+                            <div className="flex flex-wrap gap-1">
+                              {statuses.map((s) => {
+                                let badgeStyle = 'bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+                                if (s === 'Arrested') {
+                                  badgeStyle = 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900';
+                                } else if (s === 'Arresting Order') {
+                                  badgeStyle = 'bg-rose-50 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-900';
+                                } else if (s === 'Charge True') {
+                                  badgeStyle = 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-900';
+                                } else if (s === 'Name Removed') {
+                                  badgeStyle = 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 border-slate-200 dark:border-slate-700 line-through';
+                                } else if (s === 'Notice Served') {
+                                  badgeStyle = 'bg-sky-50 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300 border-sky-200 dark:border-sky-900';
+                                } else if (s === 'Bailed/Surrendered') {
+                                  badgeStyle = 'bg-indigo-50 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300 border-indigo-200 dark:border-indigo-900';
+                                }
+                                return (
+                                  <span
+                                    key={s}
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border ${badgeStyle}`}
+                                  >
+                                    {s}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 italic">No named accused registered. Case is currently registered against unknown persons.</p>
+                  )}
                 </div>
 
                 {/* Supervision Dates & Milestone Badges */}
