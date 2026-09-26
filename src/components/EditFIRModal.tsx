@@ -249,7 +249,7 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
   }, [effectivePoliceStations, caseItem]);
 
   const isDistrictLevel = currentRole === 'SP' || currentRole === 'DISTRICT_ADMIN';
-  const isSuperUser = currentRole === 'SDPO' || isDistrictLevel;
+  const isSuperUser = currentRole === 'SDPO' || isDistrictLevel || currentRole === 'ADMINISTRATOR' || currentRole === 'ADMIN';
   const isCircleInspector = currentRole === 'CI';
   const activePS = getPSFromRole(currentRole);
 
@@ -275,6 +275,97 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
   const [complainantName, setComplainantName] = useState(caseItem?.complainantName || '');
   const [complainantPhone, setComplainantPhone] = useState(caseItem?.complainantPhone || '');
   const [placeOfOccurrence, setPlaceOfOccurrence] = useState(caseItem?.placeOfOccurrence || '');
+
+  // Accused Supervision States & Handlers
+  const [accusedList, setAccusedList] = useState<{ id: string; name: string; status: string }[]>(caseItem?.accusedList || []);
+  const [accusedCount, setAccusedCount] = useState<number>(caseItem?.accusedCount || caseItem?.accusedList?.length || 0);
+  const [newAccusedName, setNewAccusedName] = useState('');
+
+  const syncAccusedCountsAndStatus = (list: { id: string; name: string; status: string }[]) => {
+    // 1. Pending for Arresting: marked yes only when Arresting Order is checked AND Arrested is NOT checked (Arrested supersedes)
+    const toArrest = list.filter((a) => {
+      const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      return statuses.includes('Arresting Order') && !statuses.includes('Arrested');
+    });
+
+    // 2. Arrested list
+    const arrested = list.filter((a) => {
+      const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      return statuses.includes('Arrested');
+    });
+
+    // 3. Notice Served list
+    const noticeServed = list.filter((a) => {
+      const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      return statuses.includes('Notice Served');
+    });
+
+    // 4. Bailed / Surrendered list
+    const bailSurrendered = list.filter((a) => {
+      const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      return statuses.includes('Bailed/Surrendered');
+    });
+
+    setPendingArrestCount(toArrest.length);
+    setPendingArrestNames(toArrest.map((a) => a.name).join(', '));
+    setPendingForArrest(toArrest.length > 0);
+
+    setArrestedCount(arrested.length);
+    setArrestedNames(arrested.map((a) => a.name).join(', '));
+    setAnyPersonArrested(arrested.length > 0);
+
+    setNoticeServedCount(noticeServed.length);
+    setNoticeServedNames(noticeServed.map((a) => a.name).join(', '));
+    setAnyPersonServedNotice(noticeServed.length > 0);
+
+    setBailSurrenderedCount(bailSurrendered.length);
+    setBailSurrenderedNames(bailSurrendered.map((a) => a.name).join(', '));
+    setAnyPersonOnBailOrSurrendered(bailSurrendered.length > 0);
+  };
+
+  const handleAddAccused = () => {
+    if (!newAccusedName.trim()) return;
+    const nextAccused = [
+      ...accusedList,
+      {
+        id: `acc-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+        name: newAccusedName.trim(),
+        status: 'Enquiry',
+      },
+    ];
+    setAccusedList(nextAccused);
+    setAccusedCount((prev) => Math.max(prev, nextAccused.length));
+    syncAccusedCountsAndStatus(nextAccused);
+    setNewAccusedName('');
+  };
+
+  const handleRemoveAccused = (id: string) => {
+    const nextAccused = accusedList.filter((a) => a.id !== id);
+    setAccusedList(nextAccused);
+    setAccusedCount((prev) => Math.max(prev, nextAccused.length));
+    syncAccusedCountsAndStatus(nextAccused);
+  };
+
+  const handleUpdateAccusedStatus = (id: string, toggleStatus: 'Enquiry' | 'Charge True' | 'Arresting Order' | 'Arrested' | 'Name Removed' | 'Notice Served' | 'Bailed/Surrendered') => {
+    const nextAccused = accusedList.map((a) => {
+      if (a.id === id) {
+        const currentStatuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
+        let updatedStatuses: string[];
+        if (currentStatuses.includes(toggleStatus)) {
+          updatedStatuses = currentStatuses.filter((s) => s !== toggleStatus);
+        } else {
+          updatedStatuses = [...currentStatuses, toggleStatus];
+        }
+        if (updatedStatuses.length === 0) {
+          updatedStatuses = ['Enquiry'];
+        }
+        return { ...a, status: updatedStatuses.join(', ') };
+      }
+      return a;
+    });
+    setAccusedList(nextAccused);
+    syncAccusedCountsAndStatus(nextAccused);
+  };
 
   const [status, setStatus] = useState<CaseStatus>(caseItem?.status || 'Under Investigation');
   const [disposedDate, setDisposedDate] = useState(caseItem?.disposedDate || '');
@@ -401,6 +492,9 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
       };
 
       setPs(caseItem.ps);
+      setAccusedList(caseItem.accusedList || []);
+      setAccusedCount(caseItem.accusedCount || caseItem.accusedList?.length || 0);
+      setNewAccusedName('');
       setFirNumber(caseItem.firNumber);
       setFirDate(caseItem.firDate);
       setDeadlineDays(caseItem.deadlineDays);
@@ -681,6 +775,8 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
       complainantName: complainantName.trim(),
       complainantPhone: complainantPhone.trim() || undefined,
       placeOfOccurrence: placeOfOccurrence.trim(),
+      accusedList: accusedList,
+      accusedCount: Number(accusedCount) || accusedList.length,
       status,
       disposedDate: status === 'Disposed' ? (disposedDate || todayStr) : undefined,
       disposalType: status === 'Disposed' ? disposalType : undefined,
@@ -965,11 +1061,159 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
               </div>
 
               {/* 2. Accused Tracking, Arrests, Notice 41A, Bail & Surrender */}
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <div className="font-black text-indigo-900 dark:text-indigo-300 flex items-center gap-2 uppercase tracking-wide">
-                  <Users className="w-4 h-4 text-indigo-600" />
-                  <span>2. Accused Tracking, Arrests, Notice (41A) & Bail</span>
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
+                  <div className="font-black text-indigo-900 dark:text-indigo-300 flex items-center gap-2 uppercase tracking-wide">
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    <span>2. Accused Supervision & Arrest Pipelines</span>
+                  </div>
+                  <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200 text-xs px-2.5 py-1 rounded-lg font-black shrink-0 self-start sm:self-auto">
+                    Named Accused: {accusedList.length}
+                  </span>
                 </div>
+
+                {/* Total Number of Accused Input */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900 rounded-xl">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wide">
+                      Total Number of Accused <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={accusedList.length}
+                      value={accusedCount || ''}
+                      onChange={(e) => setAccusedCount(Math.max(accusedList.length, Number(e.target.value) || 0))}
+                      placeholder="e.g. 5"
+                      required
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-bold text-slate-900 dark:text-white"
+                    />
+                    <p className="text-[9px] text-slate-400 mt-1 italic">
+                      Can be higher than added names if some accused are currently unknown.
+                    </p>
+                  </div>
+                  <div className="flex flex-col justify-end text-[11px] text-slate-500 dark:text-slate-400 pb-1">
+                    <div>Named Accused: <strong>{accusedList.length}</strong></div>
+                    <div>Unknown / Unnamed: <strong>{Math.max(0, accusedCount - accusedList.length)}</strong></div>
+                  </div>
+                </div>
+
+                {/* Add New Accused Control */}
+                <div className="space-y-1.5 p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                    Add Accused Person for Supervision
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newAccusedName}
+                      onChange={(e) => setNewAccusedName(e.target.value)}
+                      placeholder="Enter name and details of accused (e.g. Ramesh Kumar s/o Dinesh)..."
+                      className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs font-bold text-slate-900 dark:text-white"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddAccused();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddAccused}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shrink-0 cursor-pointer shadow-xs"
+                    >
+                      Add Accused
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 italic">
+                    💡 Supervise individual accused and move them to arrested status to instantly adjust figures.
+                  </p>
+                </div>
+
+                {/* Accused Interactive List */}
+                {accusedList.length > 0 ? (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[250px] overflow-y-auto bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                    {accusedList.map((a) => {
+                      const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : ['Enquiry'];
+                      return (
+                        <div key={a.id} className="p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 text-xs">{a.name}</span>
+                            <div className="flex flex-wrap gap-1">
+                              {statuses.map((s) => {
+                                let badgeStyle = 'bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+                                if (s === 'Arrested') {
+                                  badgeStyle = 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900';
+                                } else if (s === 'Arresting Order') {
+                                  badgeStyle = 'bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-900';
+                                } else if (s === 'Charge True') {
+                                  badgeStyle = 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900';
+                                } else if (s === 'Name Removed') {
+                                  badgeStyle = 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 border-slate-200 dark:border-slate-700 line-through';
+                                } else if (s === 'Notice Served') {
+                                  badgeStyle = 'bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-900';
+                                } else if (s === 'Bailed/Surrendered') {
+                                  badgeStyle = 'bg-indigo-50 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-900';
+                                }
+                                return (
+                                  <span key={s} className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${badgeStyle}`}>
+                                    {s}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap md:flex-nowrap shrink-0">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Set status:</span>
+                            <div className="inline-flex rounded-lg p-0.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shrink-0 flex-wrap gap-0.5">
+                              {(['Enquiry', 'Charge True', 'Arresting Order', 'Arrested', 'Name Removed', 'Notice Served', 'Bailed/Surrendered'] as const).map((st) => {
+                                const isSelected = a.status ? a.status.split(',').map((s) => s.trim()).includes(st) : (st === 'Enquiry');
+                                return (
+                                  <button
+                                    key={st}
+                                    type="button"
+                                    onClick={() => handleUpdateAccusedStatus(a.id, st)}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer ${
+                                      isSelected
+                                        ? st === 'Arrested'
+                                          ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700'
+                                          : st === 'Arresting Order'
+                                          ? 'bg-rose-600 text-white shadow-sm ring-1 ring-rose-700'
+                                          : st === 'Charge True'
+                                          ? 'bg-amber-500 text-slate-950 shadow-sm ring-1 ring-amber-600'
+                                          : st === 'Name Removed'
+                                          ? 'bg-slate-500 text-white shadow-sm ring-1 ring-slate-600 line-through'
+                                          : st === 'Notice Served'
+                                          ? 'bg-sky-600 text-white shadow-sm ring-1 ring-sky-700'
+                                          : st === 'Bailed/Surrendered'
+                                          ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-700'
+                                          : 'bg-slate-600 text-white shadow-sm ring-1 ring-slate-700'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    {st}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAccused(a.id)}
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-700 rounded transition shrink-0 cursor-pointer"
+                              title={`Remove ${a.name}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
+                    No accused added yet. Enter names above to supervise them. (Case registered against unknown person/persons)
+                  </p>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {/* A: Pending for Arrest (Yes / No Question) */}
