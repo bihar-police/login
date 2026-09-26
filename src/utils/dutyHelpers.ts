@@ -25,15 +25,43 @@ export type DutyTimeCategory = 'ALL' | 'MORNING' | 'DAY_EVENING' | 'NIGHT' | 'CU
  */
 export function categorizeDutyTime(timeSlot: string, shiftName: string): 'MORNING' | 'DAY_EVENING' | 'NIGHT' | 'CUSTOM' {
   const text = `${timeSlot} ${shiftName}`.toLowerCase();
-  if (text.includes('night') || text.includes('22:') || text.includes('23:') || text.includes('00:') || text.includes('01:') || text.includes('02:') || text.includes('03:') || text.includes('04:') || text.includes('05:')) {
+  
+  // Try to parse the start hour (first digit group before a colon)
+  const match = timeSlot.match(/(\d{1,2})\s*:\s*\d{2}/);
+  if (match) {
+    const startHour = parseInt(match[1], 10);
+    if (startHour >= 6 && startHour < 12) {
+      return 'MORNING';
+    }
+    if (startHour >= 12 && startHour < 22) {
+      return 'DAY_EVENING';
+    }
+    if (startHour >= 22 || startHour < 6) {
+      return 'NIGHT';
+    }
+  }
+
+  // Fallbacks using text matches
+  if (text.includes('night') || text.includes('nakabandi')) {
     return 'NIGHT';
   }
-  if (text.includes('morning') || text.includes('06:') || text.includes('07:') || text.includes('08:') || text.includes('09:') || text.includes('10:') || text.includes('11:') || text.includes('od 1')) {
+  if (text.includes('morning')) {
     return 'MORNING';
   }
-  if (text.includes('day') || text.includes('evening') || text.includes('12:') || text.includes('13:') || text.includes('14:') || text.includes('15:') || text.includes('16:') || text.includes('17:') || text.includes('18:') || text.includes('19:') || text.includes('20:') || text.includes('21:') || text.includes('od 2')) {
+  if (text.includes('day') || text.includes('evening') || text.includes('mobile')) {
     return 'DAY_EVENING';
   }
+
+  const trimmedSlot = timeSlot.trim();
+  const startsWithNightHour = /^(22|23|00|01|02|03|04|05):/.test(trimmedSlot);
+  if (startsWithNightHour) return 'NIGHT';
+
+  const startsWithMorningHour = /^(06|07|08|09|10|11):/.test(trimmedSlot);
+  if (startsWithMorningHour || text.includes('od 1')) return 'MORNING';
+
+  const startsWithDayHour = /^(12|13|14|15|16|17|18|19|20|21):/.test(trimmedSlot);
+  if (startsWithDayHour || text.includes('od 2')) return 'DAY_EVENING';
+
   return 'CUSTOM';
 }
 
