@@ -48,7 +48,11 @@ import {
   UserX,
   Target,
   ArrowRight,
+  MapPin,
+  Compass,
 } from 'lucide-react';
+import { fetchGRForAddress } from '../utils/geoCoder';
+import { POAddressMapPicker } from './POAddressMapPicker';
 
 // =========================================================================
 // REUSABLE TOGGLE COMPONENTS FOR CASE REVIEWS
@@ -275,6 +279,29 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
   const [complainantName, setComplainantName] = useState(caseItem?.complainantName || '');
   const [complainantPhone, setComplainantPhone] = useState(caseItem?.complainantPhone || '');
   const [placeOfOccurrence, setPlaceOfOccurrence] = useState(caseItem?.placeOfOccurrence || '');
+  const [grNumber, setGrNumber] = useState(caseItem?.grNumber || '');
+  const [latitude, setLatitude] = useState<number | undefined>(caseItem?.latitude);
+  const [longitude, setLongitude] = useState<number | undefined>(caseItem?.longitude);
+  const [isFetchingGR, setIsFetchingGR] = useState(false);
+
+  const handleFetchGR = async () => {
+    setIsFetchingGR(true);
+    try {
+      const res = await fetchGRForAddress(
+        placeOfOccurrence,
+        ps,
+        caseItem?.subdivision,
+        (caseItem as any)?.district
+      );
+      setGrNumber(res.grNumber);
+      setLatitude(res.latitude);
+      setLongitude(res.longitude);
+    } catch {
+      // Fallback
+    } finally {
+      setIsFetchingGR(false);
+    }
+  };
 
   // Accused Supervision States & Handlers
   const [accusedList, setAccusedList] = useState<{ id: string; name: string; status: string }[]>(caseItem?.accusedList || []);
@@ -505,6 +532,9 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
       setComplainantName(caseItem.complainantName);
       setComplainantPhone(caseItem.complainantPhone || '');
       setPlaceOfOccurrence(caseItem.placeOfOccurrence);
+      setGrNumber(caseItem.grNumber || '');
+      setLatitude(caseItem.latitude);
+      setLongitude(caseItem.longitude);
       setStatus(caseItem.status);
       setDisposedDate(caseItem.disposedDate || '');
       setDisposalType(caseItem.disposalType || 'Disposed');
@@ -775,6 +805,10 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
       complainantName: complainantName.trim(),
       complainantPhone: complainantPhone.trim() || undefined,
       placeOfOccurrence: placeOfOccurrence.trim(),
+      poAddress: placeOfOccurrence.trim(),
+      grNumber: grNumber.trim() || undefined,
+      latitude: latitude,
+      longitude: longitude,
       accusedList: accusedList,
       accusedCount: Number(accusedCount) || accusedList.length,
       status,
@@ -1976,8 +2010,8 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                 </p>
               </div>
 
-              {/* Complainant & Place */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Complainant & Contact */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Complainant Name <span className="text-rose-500">*</span>
@@ -2004,20 +2038,26 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Place of Occurrence (PO) <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={placeOfOccurrence}
-                    onChange={(e) => setPlaceOfOccurrence(e.target.value)}
-                    placeholder="Village / Location"
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
+              {/* Place of Occurrence (PO) with Live Search on Map & Pick GR */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                <POAddressMapPicker
+                  value={placeOfOccurrence}
+                  onChange={setPlaceOfOccurrence}
+                  grNumber={grNumber}
+                  onGrChange={setGrNumber}
+                  latitude={latitude}
+                  longitude={longitude}
+                  onCoordinatesChange={(lat, lng) => {
+                    setLatitude(lat);
+                    setLongitude(lng);
+                  }}
+                  psName={ps}
+                  subdivisionName={caseItem?.subdivision}
+                  districtName={(caseItem as any)?.district}
+                  required
+                />
               </div>
 
               {/* Case Classification (SR / Non-SR) */}
