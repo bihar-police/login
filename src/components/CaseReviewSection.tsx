@@ -878,8 +878,8 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
                     className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs p-1.5 font-semibold text-slate-900 dark:text-white"
                   >
                     <option value="ALL">All Stations ({policeStationOptions.length})</option>
-                    {policeStationOptions.map((ps) => (
-                      <option key={ps} value={ps}>
+                    {policeStationOptions.map((ps, idx) => (
+                      <option key={`${ps}-${idx}`} value={ps}>
                         {ps} PS
                       </option>
                     ))}
@@ -901,8 +901,8 @@ export const CaseReviewSection: React.FC<CaseReviewSectionProps> = ({
                         ? `All ${filters.policeStation} IOs (${ioOptions.length})`
                         : `All Officers / IOs (${ioOptions.length})`}
                     </option>
-                    {ioOptions.map((io) => (
-                      <option key={io} value={io}>
+                    {ioOptions.map((io, idx) => (
+                      <option key={`${io}-${idx}`} value={io}>
                         👮 {io}
                       </option>
                     ))}
