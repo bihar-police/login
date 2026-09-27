@@ -288,8 +288,8 @@ export const LandDisputeSection: React.FC<LandDisputeSectionProps> = ({
                 className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs p-1.5 font-medium"
               >
                 <option value="ALL">All {psOptions.length} Police Stations</option>
-                {psOptions.map((st) => (
-                  <option key={st} value={st}>
+                {psOptions.map((st, idx) => (
+                  <option key={`${st}-${idx}`} value={st}>
                     {st} PS
                   </option>
                 ))}
@@ -490,8 +490,8 @@ export const LandDisputeSection: React.FC<LandDisputeSectionProps> = ({
                     disabled={Boolean(activePS)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-white font-bold"
                   >
-                    {psOptions.map((st) => (
-                      <option key={st} value={st}>
+                    {psOptions.map((st, idx) => (
+                      <option key={`${st}-${idx}`} value={st}>
                         {st} PS
                       </option>
                     ))}
