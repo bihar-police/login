@@ -170,13 +170,25 @@ export const ViewCaseModal: React.FC<ViewCaseModalProps> = ({
             </div>
 
             <div className="sm:col-span-2">
-              <span className="text-slate-500 font-bold block mb-1 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-amber-500" />
-                <span>Place of Occurrence (PO):</span>
+              <span className="text-slate-500 font-bold block mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Place of Occurrence (PO):</span>
+                </span>
+                {caseItem.grNumber && (
+                  <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                    GR: {caseItem.grNumber}
+                  </span>
+                )}
               </span>
               <p className="text-slate-900 dark:text-white font-semibold">
                 {caseItem.placeOfOccurrence}
               </p>
+              {caseItem.latitude && caseItem.longitude && (
+                <p className="text-[11px] font-mono text-slate-500 mt-0.5">
+                  GPS Coordinates: {caseItem.latitude.toFixed(5)}° N, {caseItem.longitude.toFixed(5)}° E
+                </p>
+              )}
             </div>
           </div>
 
@@ -373,7 +385,7 @@ export const ViewCaseModal: React.FC<ViewCaseModalProps> = ({
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {caseItem.prDates.map((d, i) => (
-                      <span key={d} className="bg-purple-200/80 dark:bg-purple-900 text-purple-900 dark:text-purple-200 font-extrabold text-[11px] px-2.5 py-0.5 rounded-full border border-purple-300 dark:border-purple-700">
+                      <span key={`${d}-${i}`} className="bg-purple-200/80 dark:bg-purple-900 text-purple-900 dark:text-purple-200 font-extrabold text-[11px] px-2.5 py-0.5 rounded-full border border-purple-300 dark:border-purple-700">
                         PR #{i + 1}: {formatReadableDate(d)}
                       </span>
                     ))}
@@ -389,7 +401,7 @@ export const ViewCaseModal: React.FC<ViewCaseModalProps> = ({
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {caseItem.caseReviewDates.map((d, i) => (
-                      <span key={d} className="bg-blue-200/80 dark:bg-blue-900 text-blue-900 dark:text-blue-200 font-extrabold text-[11px] px-2.5 py-0.5 rounded-full border border-blue-300 dark:border-blue-700">
+                      <span key={`${d}-${i}`} className="bg-blue-200/80 dark:bg-blue-900 text-blue-900 dark:text-blue-200 font-extrabold text-[11px] px-2.5 py-0.5 rounded-full border border-blue-300 dark:border-blue-700">
                         Review #{i + 1}: {formatReadableDate(d)}
                       </span>
                     ))}
