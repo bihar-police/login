@@ -574,8 +574,8 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
               className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
             >
               <option value="ALL">All Districts</option>
-              {effectiveDistricts.map((d) => (
-                <option key={d.id || d.name} value={d.name}>
+              {effectiveDistricts.map((d, idx) => (
+                <option key={d.id || `${d.name}-${idx}`} value={d.name}>
                   {d.name} District
                 </option>
               ))}
@@ -600,8 +600,8 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
                   className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
                 >
                   <option value="ALL">All Districts</option>
-                  {effectiveDistricts.map((d) => (
-                    <option key={d.id || d.name} value={d.name}>
+                  {effectiveDistricts.map((d, idx) => (
+                    <option key={d.id || `${d.name}-${idx}`} value={d.name}>
                       {d.name}
                     </option>
                   ))}
@@ -615,8 +615,8 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
                   className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
                 >
                   <option value="ALL">All Subdivisions</option>
-                  {availableSubdivisions.map((s) => (
-                    <option key={s.id || s.name} value={s.name}>
+                  {availableSubdivisions.map((s, idx) => (
+                    <option key={s.id || `${s.name}-${idx}`} value={s.name}>
                       {s.name} Subdiv
                     </option>
                   ))}
@@ -643,8 +643,8 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
                   className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
                 >
                   <option value="ALL">All Districts</option>
-                  {effectiveDistricts.map((d) => (
-                    <option key={d.id || d.name} value={d.name}>
+                  {effectiveDistricts.map((d, idx) => (
+                    <option key={d.id || `${d.name}-${idx}`} value={d.name}>
                       {d.name}
                     </option>
                   ))}
@@ -658,8 +658,8 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
                   className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white cursor-pointer"
                 >
                   <option value="ALL">All Subdivisions</option>
-                  {availableSubdivisions.map((s) => (
-                    <option key={s.id || s.name} value={s.name}>
+                  {availableSubdivisions.map((s, idx) => (
+                    <option key={s.id || `${s.name}-${idx}`} value={s.name}>
                       {s.name}
                     </option>
                   ))}
@@ -672,8 +672,8 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
                 disabled={Boolean(activePS)}
                 className="p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-xs text-slate-900 dark:text-white disabled:opacity-80 cursor-pointer"
               >
-                {availableStations.map((ps) => (
-                  <option key={ps.id || ps.name} value={ps.name}>
+                {availableStations.map((ps, idx) => (
+                  <option key={ps.id || `${ps.name}-${idx}`} value={ps.name}>
                     {ps.name} PS
                   </option>
                 ))}
@@ -1269,13 +1269,13 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
           </div>
 
           <div className="space-y-2 text-xs">
-            {(contextPS ? [contextPS] : activeStationsList).map((ps) => {
+            {(contextPS ? [contextPS] : activeStationsList).map((ps, idx) => {
               const rep = todayReports.find((r) => r.ps === ps);
               const od = rep?.odDetails;
 
               return (
                 <div
-                  key={ps}
+                  key={`od-${ps}-${idx}`}
                   className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                 >
                   <span className="font-bold text-slate-800 dark:text-slate-200 w-28 shrink-0">
@@ -1308,13 +1308,13 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
           </div>
 
           <div className="space-y-2 text-xs">
-            {(contextPS ? [contextPS] : activeStationsList).map((ps) => {
+            {(contextPS ? [contextPS] : activeStationsList).map((ps, idx) => {
               const rep = todayReports.find((r) => r.ps === ps);
               const gasti = rep?.gastiDetails;
 
               return (
                 <div
-                  key={ps}
+                  key={`gasti-${ps}-${idx}`}
                   className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                 >
                   <span className="font-bold text-slate-800 dark:text-slate-200 w-28 shrink-0">
@@ -1432,8 +1432,8 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
                   }}
                   className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
                 >
-                  {activeStationsList.map((ps) => (
-                    <option key={ps} value={ps}>
+                  {activeStationsList.map((ps, idx) => (
+                    <option key={`${ps}-${idx}`} value={ps}>
                       {ps} Police Station
                     </option>
                   ))}
@@ -1463,8 +1463,8 @@ export const DailyReportDashboard: React.FC<DailyReportDashboardProps> = ({
                       required
                     >
                       <option value="">-- Choose Officer --</option>
-                      {newLeaveAvailableOfficers.map((io) => (
-                        <option key={io.id} value={io.name}>
+                      {newLeaveAvailableOfficers.map((io, idx) => (
+                        <option key={io.id || `${io.name}-${idx}`} value={io.name}>
                           {io.name} ({io.rank})
                         </option>
                       ))}
