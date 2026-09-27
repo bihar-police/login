@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import L from 'leaflet';
 import {
   FIRCase,
   PoliceStation,
@@ -9,6 +8,14 @@ import {
   UserAccount,
   CrimeHead,
 } from '../types';
+
+// Safely obtain Leaflet instance from window.L (loaded via CDN in index.html) or global scope
+const getLeaflet = (): any => {
+  if (typeof window !== 'undefined' && (window as any).L) {
+    return (window as any).L;
+  }
+  return null;
+};
 import {
   MapPin,
   Flame,
@@ -266,11 +273,11 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
   onEditCase,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const leafletMapRef = useRef<L.Map | null>(null);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
-  const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
-  const hotspotCirclesLayerGroupRef = useRef<L.LayerGroup | null>(null);
-  const radarMarkersLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const leafletMapRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
+  const markersLayerGroupRef = useRef<any>(null);
+  const hotspotCirclesLayerGroupRef = useRef<any>(null);
+  const radarMarkersLayerGroupRef = useRef<any>(null);
 
   // Determine Login Level & Scoping capabilities
   const isAdministrator =
@@ -672,7 +679,8 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
 
   // Initialize Map
   useEffect(() => {
-    if (!mapContainerRef.current) return;
+    const L = getLeaflet();
+    if (!L || !mapContainerRef.current) return;
 
     if (!leafletMapRef.current) {
       const initialLat = 25.1228;
@@ -714,7 +722,8 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
 
   // Update Tile Layer
   useEffect(() => {
-    if (!leafletMapRef.current) return;
+    const L = getLeaflet();
+    if (!L || !leafletMapRef.current) return;
     if (tileLayerRef.current) {
       leafletMapRef.current.removeLayer(tileLayerRef.current);
     }
@@ -729,8 +738,9 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
 
   // Render Hotspots, Animated Radars, and Incident Pins
   useEffect(() => {
+    const L = getLeaflet();
     const map = leafletMapRef.current;
-    if (!map) return;
+    if (!L || !map) return;
 
     // Clear previous elements
     hotspotCirclesLayerGroupRef.current?.clearLayers();
@@ -973,8 +983,9 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
 
   // Reset Map View to default extent
   const handleResetView = () => {
+    const L = getLeaflet();
     if (leafletMapRef.current) {
-      if (filteredPoints.length > 0) {
+      if (filteredPoints.length > 0 && L) {
         const bounds = L.latLngBounds(filteredPoints.map((p) => [p.lat, p.lng]));
         leafletMapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
       } else {
