@@ -1733,11 +1733,12 @@ export default function App() {
         {/* Tab 8: Unified Analytics & Comparison Graphs */}
         {activeTab === 'analytics_graphs' && (
           <UnifiedAnalyticsGraphs
-            cases={cases.filter(isRecordInJurisdictionScope)}
+            cases={cases.filter(isRecordInUserBaseScope)}
             ios={ios.filter(isRecordInUserBaseScope)}
-            dailyReports={dailyReports.filter(isRecordInJurisdictionScope)}
+            dailyReports={dailyReports.filter(isRecordInUserBaseScope)}
             availablePoliceStations={policeStations}
             currentRole={currentRole}
+            currentUserAccount={currentUserAccount}
             activePS={activePS}
             onViewCase={(c) => setViewingCase(c)}
             onApplyFilter={handleApplyFilter}
