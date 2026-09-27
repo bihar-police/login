@@ -5,6 +5,7 @@ import {
   DailyCrimeReport,
   PoliceStation,
   UserRole,
+  UserAccount,
   LeaveLedgerEntry,
 } from '../types';
 import {
@@ -52,6 +53,7 @@ import {
 } from 'lucide-react';
 import { getDeadlineInfo, formatReadableDate } from '../utils/helpers';
 import { exportToExcel } from '../utils/reportExport';
+import { CrimeSpectrumComparison } from './CrimeSpectrumComparison';
 
 interface UnifiedAnalyticsGraphsProps {
   cases: FIRCase[];
@@ -60,6 +62,7 @@ interface UnifiedAnalyticsGraphsProps {
   leaveLedger?: LeaveLedgerEntry[];
   availablePoliceStations?: PoliceStation[];
   currentRole: UserRole;
+  currentUserAccount?: UserAccount | null;
   activePS?: string | null;
   onViewCase?: (c: FIRCase) => void;
   onApplyFilter?: (filters: any) => void;
@@ -72,7 +75,9 @@ interface UnifiedAnalyticsGraphsProps {
 // 3. Different Crime Head wise reporting, Different Head wise disposal
 // 4. IO 360° Performance Comparison
 // 5. IO-Wise Arresting Comparison, IO Case Disposal, IO Leaves Availed
+// 6. Multi-PS Crime Distribution Spectrum Comparison
 export type GraphDataSource =
+  | 'CRIME_SPECTRUM_COMPARISON'
   | 'IO_VS_DAY_GASTI'
   | 'IO_VS_EVENING_GASTI'
   | 'IO_VS_NIGHT_GASTI'
@@ -128,6 +133,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
   leaveLedger = [],
   availablePoliceStations = [],
   currentRole,
+  currentUserAccount,
   activePS,
   onViewCase,
   onApplyFilter,
@@ -1637,6 +1643,23 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
 
         {/* Dimension Selection Buttons */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-1.5">
+          {/* 0. Crime Spectrum Comparison (PS Wise / Multi-Crime / Multi-Jurisdiction) */}
+          <button
+            type="button"
+            onClick={() => setSelectedSource('CRIME_SPECTRUM_COMPARISON')}
+            className={`p-1.5 rounded-lg border text-xs font-bold transition text-left flex flex-col justify-between gap-0.5 cursor-pointer col-span-2 sm:col-span-1 ${
+              selectedSource === 'CRIME_SPECTRUM_COMPARISON'
+                ? 'bg-gradient-to-r from-rose-600 via-purple-600 to-indigo-600 text-white border-rose-500 shadow-sm ring-1 ring-rose-300'
+                : 'bg-rose-50/70 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200 border-rose-200 dark:border-rose-900/60 hover:bg-rose-100'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <Disc className="w-3.5 h-3.5 text-rose-300" />
+              <span className="text-[8px] font-black uppercase tracking-wider px-1 py-0.2 rounded bg-white/20 text-white">Spectrum</span>
+            </div>
+            <span className="font-black text-[10px] leading-tight">Multi-PS Crime Spectrum</span>
+          </button>
+
           {/* 1. IO vs Day Gasti */}
           <button
             type="button"
@@ -2002,8 +2025,19 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
         )}
       </div>
 
-      {/* LIST-TYPE OFFICER COMPARISON SELECTOR (50% less vertically wide header) */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+      {selectedSource === 'CRIME_SPECTRUM_COMPARISON' ? (
+        <CrimeSpectrumComparison
+          cases={cases}
+          availablePoliceStations={availablePoliceStations}
+          currentRole={currentRole}
+          currentUserAccount={currentUserAccount}
+          activePS={activePS}
+          onViewCase={onViewCase}
+        />
+      ) : (
+        <>
+          {/* LIST-TYPE OFFICER COMPARISON SELECTOR (50% less vertically wide header) */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
         <div className="py-1.5 px-3 bg-slate-50/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="p-1 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 rounded-md">
@@ -2707,6 +2741,8 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* Dynamic Floating Hover Details Popup Card */}
       {hoverTooltip && hoverTooltip.visible && (
