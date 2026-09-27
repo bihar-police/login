@@ -949,8 +949,8 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs p-1.5 text-slate-900 dark:text-white font-semibold"
             >
               <option value="ALL">All Police Stations ({psOptions.length})</option>
-              {psOptions.map((st) => (
-                <option key={st} value={st}>
+              {psOptions.map((st, idx) => (
+                <option key={`${st}-${idx}`} value={st}>
                   {st} PS
                 </option>
               ))}
@@ -985,8 +985,8 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
               <option value="ALL">
                 {psFilter !== 'ALL' ? `All ${psFilter} IOs (${uniqueIOs.length})` : `All IOs (${uniqueIOs.length})`}
               </option>
-              {uniqueIOs.map((io) => (
-                <option key={io} value={io}>
+              {uniqueIOs.map((io, idx) => (
+                <option key={`${io}-${idx}`} value={io}>
                   👮 {io}
                 </option>
               ))}
@@ -1600,7 +1600,7 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
                           >
                             <span className="font-extrabold text-slate-800 dark:text-slate-200">{a.name}</span>
                             <div className="flex flex-wrap gap-1">
-                              {statuses.map((s) => {
+                              {statuses.map((s, sIdx) => {
                                 let badgeStyle = 'bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
                                 if (s === 'Arrested') {
                                   badgeStyle = 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900';
@@ -1617,7 +1617,7 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
                                 }
                                 return (
                                   <span
-                                    key={s}
+                                    key={`${s}-${sIdx}`}
                                     className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border ${badgeStyle}`}
                                   >
                                     {s}
@@ -1693,7 +1693,7 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
                       {c.prDates && c.prDates.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {c.prDates.map((d, idx) => (
-                            <span key={d} className="bg-purple-100 dark:bg-purple-900/80 text-purple-900 dark:text-purple-200 font-extrabold text-[10px] px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-700">
+                            <span key={`${d}-${idx}`} className="bg-purple-100 dark:bg-purple-900/80 text-purple-900 dark:text-purple-200 font-extrabold text-[10px] px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-700">
                               PR#{idx+1}: {formatReadableDate(d)}
                             </span>
                           ))}
@@ -1734,7 +1734,7 @@ export const SupervisionStatusSection: React.FC<SupervisionStatusSectionProps> =
                       {c.caseReviewDates && c.caseReviewDates.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {c.caseReviewDates.map((d, idx) => (
-                            <span key={d} className="bg-blue-100 dark:bg-blue-900/80 text-blue-900 dark:text-blue-200 font-extrabold text-[10px] px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-700">
+                            <span key={`${d}-${idx}`} className="bg-blue-100 dark:bg-blue-900/80 text-blue-900 dark:text-blue-200 font-extrabold text-[10px] px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-700">
                               Rev#{idx+1}: {formatReadableDate(d)}
                             </span>
                           ))}
