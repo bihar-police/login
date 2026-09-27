@@ -694,8 +694,8 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2 text-xs font-bold text-slate-900 dark:text-white"
                 >
                   <option value="ALL">All Police Stations</option>
-                  {psOptions.map((st) => (
-                    <option key={st} value={st}>
+                  {psOptions.map((st, idx) => (
+                    <option key={`${st}-${idx}`} value={st}>
                       {st} PS
                     </option>
                   ))}
@@ -774,8 +774,8 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 text-xs font-bold text-slate-900 dark:text-white"
                 >
                   <option value="ALL">All Investigating Officers</option>
-                  {uniqueIOs.map((io) => (
-                    <option key={io} value={io}>
+                  {uniqueIOs.map((io, idx) => (
+                    <option key={`${io}-${idx}`} value={io}>
                       {io}
                     </option>
                   ))}
@@ -1288,8 +1288,8 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
                     onChange={(e) => setPs(e.target.value as PoliceStationName)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-bold"
                   >
-                    {psOptions.map((st) => (
-                      <option key={st} value={st}>
+                    {psOptions.map((st, idx) => (
+                      <option key={`${st}-${idx}`} value={st}>
                         {st} PS
                       </option>
                     ))}
