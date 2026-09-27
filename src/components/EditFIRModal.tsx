@@ -1173,7 +1173,7 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-extrabold text-slate-800 dark:text-slate-200 text-xs">{a.name}</span>
                             <div className="flex flex-wrap gap-1">
-                              {statuses.map((s) => {
+                              {statuses.map((s, sIdx) => {
                                 let badgeStyle = 'bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
                                 if (s === 'Arrested') {
                                   badgeStyle = 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900';
@@ -1189,7 +1189,7 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                                   badgeStyle = 'bg-indigo-50 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-900';
                                 }
                                 return (
-                                  <span key={s} className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${badgeStyle}`}>
+                                  <span key={`${s}-${sIdx}`} className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${badgeStyle}`}>
                                     {s}
                                   </span>
                                 );
@@ -1200,11 +1200,11 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                           <div className="flex items-center gap-2 flex-wrap md:flex-nowrap shrink-0">
                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Set status:</span>
                             <div className="inline-flex rounded-lg p-0.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shrink-0 flex-wrap gap-0.5">
-                              {(['Enquiry', 'Charge True', 'Arresting Order', 'Arrested', 'Name Removed', 'Notice Served', 'Bailed/Surrendered'] as const).map((st) => {
+                              {(['Enquiry', 'Charge True', 'Arresting Order', 'Arrested', 'Name Removed', 'Notice Served', 'Bailed/Surrendered'] as const).map((st, stIdx) => {
                                 const isSelected = a.status ? a.status.split(',').map((s) => s.trim()).includes(st) : (st === 'Enquiry');
                                 return (
                                   <button
-                                    key={st}
+                                    key={`${st}-${stIdx}`}
                                     type="button"
                                     onClick={() => handleUpdateAccusedStatus(a.id, st)}
                                     className={`px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer ${
@@ -1769,7 +1769,7 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                     ) : (
                       caseReviewDates.map((date, idx) => (
                         <span
-                          key={date}
+                          key={`${date}-${idx}`}
                           className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 text-xs font-bold px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-700"
                         >
                           <span>Review #{idx + 1}: {date}</span>
@@ -1825,8 +1825,8 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                     disabled={!isSuperUser}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-amber-500"
                   >
-                    {psOptions.map((p) => (
-                      <option key={p} value={p}>{p} PS</option>
+                    {psOptions.map((p, idx) => (
+                      <option key={`${p}-${idx}`} value={p}>{p} PS</option>
                     ))}
                   </select>
                 </div>
@@ -1959,12 +1959,12 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
 
                 {/* Selected Crime Head Tags */}
                 <div className="flex flex-wrap items-center gap-1.5 min-h-[32px] p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  {selectedCrimeHeads.map((head) => {
+                  {selectedCrimeHeads.map((head, idx) => {
                     const config = getDynamicCrimeHeadsConfig();
                     const meta = config[head] || CRIME_HEADS_CONFIG[head as CrimeHead];
                     return (
                       <span
-                        key={head}
+                        key={`${head}-${idx}`}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-900 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800 animate-fadeIn"
                       >
                         <span>{meta?.icon || '⚖️'}</span>
@@ -1994,11 +1994,11 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                     className="flex-1 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-xl p-2 text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                   >
                     <option value="">+ Add or Toggle Another Crime Head (e.g. Arms Act, Attempt to Murder, Murder)...</option>
-                    {ALL_CRIME_HEADS.map((headId) => {
+                    {ALL_CRIME_HEADS.map((headId, idx) => {
                       const meta = CRIME_HEADS_CONFIG[headId];
                       const isSelected = selectedCrimeHeads.includes(headId);
                       return (
-                        <option key={headId} value={headId}>
+                        <option key={`${headId}-${idx}`} value={headId}>
                           {isSelected ? '✓ ' : '+ '} {meta?.icon || '⚖️'} {meta?.name || headId} ({meta?.hindiName || ''}) — {meta?.category || 'SLL'}
                         </option>
                       );
@@ -2141,8 +2141,8 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                     onChange={(e) => setIoName(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-amber-500"
                   >
-                    {availableIOs.map((io) => (
-                      <option key={io.id} value={io.name}>
+                    {availableIOs.map((io, idx) => (
+                      <option key={io.id || `${io.name}-${idx}`} value={io.name}>
                         {io.name} ({io.ps})
                       </option>
                     ))}
@@ -2327,7 +2327,7 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                     ) : (
                       prDates.map((date, idx) => (
                         <span
-                          key={date}
+                          key={`${date}-${idx}`}
                           className="inline-flex items-center gap-1 bg-purple-100 dark:bg-purple-900/60 text-purple-900 dark:text-purple-200 text-xs font-bold px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-700"
                         >
                           <span>PR #{idx + 1}: {date}</span>
@@ -2372,7 +2372,7 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
                     ) : (
                       caseReviewDates.map((date, idx) => (
                         <span
-                          key={date}
+                          key={`${date}-${idx}`}
                           className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 text-xs font-bold px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-700"
                         >
                           <span>Review #{idx + 1}: {date}</span>
