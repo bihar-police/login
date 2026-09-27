@@ -1093,8 +1093,8 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
                 }`}
               >
                 <option value="ALL">All Districts</option>
-                {availableDistricts.map((d) => (
-                  <option key={d} value={d}>
+                {availableDistricts.map((d, idx) => (
+                  <option key={`${d}-${idx}`} value={d}>
                     {d} District
                   </option>
                 ))}
@@ -1162,8 +1162,8 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
                 <option value="ALL">
                   {isSpOrDistrictAdmin ? `All Subdivisions (${availableSubdivisions.length})` : 'All Subdivisions'}
                 </option>
-                {availableSubdivisions.map((sub) => (
-                  <option key={sub} value={sub}>
+                {availableSubdivisions.map((sub, idx) => (
+                  <option key={`${sub}-${idx}`} value={sub}>
                     {sub} Subdivision
                   </option>
                 ))}
@@ -1775,8 +1775,8 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
           {/* Crime Dots Legend */}
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-            {activeCrimes.map((cr) => (
-              <div key={cr} className="flex items-center gap-1">
+            {activeCrimes.map((cr, idx) => (
+              <div key={`legend-yr-${cr}-${idx}`} className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CRIME_COLORS[cr] }} />
                 <span>{cr}</span>
               </div>
@@ -1869,7 +1869,7 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
               {/* Month X Labels */}
               {monthlyData.map((m, idx) => (
                 <text
-                  key={m.monthName}
+                  key={`month-lbl-${m.monthName}-${idx}`}
                   x={30 + idx * 38}
                   y="195"
                   textAnchor="middle"
@@ -1883,8 +1883,8 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
           {/* Crime Dots Legend */}
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-            {activeCrimes.map((cr) => (
-              <div key={cr} className="flex items-center gap-1">
+            {activeCrimes.map((cr, idx) => (
+              <div key={`legend-area-${cr}-${idx}`} className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CRIME_COLORS[cr] }} />
                 <span>{cr}</span>
               </div>
@@ -1912,11 +1912,11 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
           {/* Stacked Monthly Column Bars */}
           <div className="h-56 flex items-end justify-between gap-1.5 pt-4 px-2 border-b border-slate-100 dark:border-slate-800">
-            {monthlyData.map((md) => {
+            {monthlyData.map((md, mIdx) => {
               const heightPercent = Math.max((md.total / maxMonthTotal) * 100, 3);
               return (
                 <div
-                  key={md.monthName}
+                  key={`monthly-col-${md.monthName}-${mIdx}`}
                   onClick={() => openDrillDown(`${md.monthName} FIR Cases`, `Total: ${md.total} Incidences`, md.cases)}
                   className="flex-1 flex flex-col items-center gap-1 group cursor-pointer h-full justify-end"
                 >
@@ -1927,13 +1927,13 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
                     className="w-full max-w-[24px] bg-slate-100 rounded-t-md overflow-hidden flex flex-col-reverse shadow-inner transition-all group-hover:scale-105"
                     style={{ height: `${heightPercent}%` }}
                   >
-                    {activeCrimes.map((cr) => {
+                    {activeCrimes.map((cr, cIdx) => {
                       const count = md.counts[cr] || 0;
                       if (count === 0) return null;
                       const segmentHeight = (count / (md.total || 1)) * 100;
                       return (
                         <div
-                          key={cr}
+                          key={`col-seg-${cr}-${cIdx}`}
                           style={{
                             height: `${segmentHeight}%`,
                             backgroundColor: CRIME_COLORS[cr] || '#94a3b8',
@@ -1952,8 +1952,8 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
           {/* Legend */}
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-            {activeCrimes.map((cr) => (
-              <div key={cr} className="flex items-center gap-1">
+            {activeCrimes.map((cr, idx) => (
+              <div key={`legend-col-${cr}-${idx}`} className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CRIME_COLORS[cr] }} />
                 <span>{cr}</span>
               </div>
@@ -2049,8 +2049,8 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
           {/* Legend */}
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-            {activeCrimes.map((cr) => (
-              <div key={cr} className="flex items-center gap-1">
+            {activeCrimes.map((cr, idx) => (
+              <div key={`legend-line-${cr}-${idx}`} className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CRIME_COLORS[cr] }} />
                 <span>{cr}</span>
               </div>
@@ -2083,11 +2083,11 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
           {/* Day of week bar chart */}
           <div className="h-48 flex items-end justify-between gap-2 pt-2 px-1 border-b border-slate-100 dark:border-slate-800">
-            {dayOfWeekData.map((d) => {
+            {dayOfWeekData.map((d, dIdx) => {
               const heightPercent = Math.max((d.count / maxDayCount) * 100, 6);
               return (
                 <div
-                  key={d.day}
+                  key={`day-bar-${d.day}-${dIdx}`}
                   onClick={() => openDrillDown(`${d.day}day Crime Cases`, `${d.count} Total Recorded`, d.cases)}
                   className="flex-1 flex flex-col items-center gap-1 group cursor-pointer h-full justify-end"
                 >
@@ -2136,7 +2136,7 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
                   .join(' ');
                 return (
                   <polygon
-                    key={idx}
+                    key={`spider-lvl-${idx}`}
                     points={points}
                     className="fill-none stroke-slate-200 dark:stroke-slate-700"
                     strokeWidth={0.8}
@@ -2153,7 +2153,7 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
                 const ly = 120 + 95 * Math.sin(angle);
 
                 return (
-                  <g key={axis.crime}>
+                  <g key={`axis-line-${axis.crime}-${aIdx}`}>
                     <line x1="120" y1="120" x2={x2} y2={y2} stroke="#cbd5e1" strokeWidth={0.8} />
                     <text
                       x={lx}
@@ -2206,11 +2206,11 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
           {/* District Stacked Bars */}
           <div className="h-48 flex items-end justify-center gap-6 pt-2 px-2 border-b border-slate-100 dark:border-slate-800">
-            {districtData.map((d) => {
+            {districtData.map((d, dIdx) => {
               const heightPercent = Math.max((d.total / maxDistrictTotal) * 100, 10);
               return (
                 <div
-                  key={d.district}
+                  key={`dist-bar-${d.district}-${dIdx}`}
                   onClick={() => openDrillDown(`${d.district} District Crime Cases`, `Total: ${d.total} Cases`, d.cases)}
                   className="flex flex-col items-center gap-1 group cursor-pointer h-full justify-end"
                 >
@@ -2221,13 +2221,13 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
                     className="w-24 sm:w-32 bg-slate-100 rounded-t-md overflow-hidden flex flex-col-reverse shadow-inner transition-all group-hover:scale-105"
                     style={{ height: `${heightPercent}%` }}
                   >
-                    {activeCrimes.map((cr) => {
+                    {activeCrimes.map((cr, crIdx) => {
                       const count = d.counts[cr] || 0;
                       if (count === 0) return null;
                       const segmentHeight = (count / (d.total || 1)) * 100;
                       return (
                         <div
-                          key={cr}
+                          key={`dist-seg-${cr}-${crIdx}`}
                           style={{
                             height: `${segmentHeight}%`,
                             backgroundColor: CRIME_COLORS[cr] || '#94a3b8',
@@ -2246,8 +2246,8 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
           {/* Legend */}
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-            {activeCrimes.slice(0, 6).map((cr) => (
-              <div key={cr} className="flex items-center gap-1">
+            {activeCrimes.slice(0, 6).map((cr, idx) => (
+              <div key={`legend-dist-${cr}-${idx}`} className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CRIME_COLORS[cr] }} />
                 <span>{cr}</span>
               </div>
@@ -2284,11 +2284,11 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
         {/* Grand Full-Width Multi-PS Stacked Bars */}
         <div className="h-64 flex items-end justify-between gap-1 sm:gap-2 pt-6 px-1 border-b border-slate-100 dark:border-slate-800 overflow-x-auto">
-          {stationRankedData.map((psData) => {
+          {stationRankedData.map((psData, pIdx) => {
             const heightPercent = Math.max((psData.total / maxStationTotal) * 100, 2);
             return (
               <div
-                key={psData.ps}
+                key={`ps-bar-${psData.ps}-${pIdx}`}
                 onClick={() => openDrillDown(`${psData.ps} PS Crime Spectrum`, `Total Volume: ${psData.total} Cases`, psData.cases)}
                 className="flex-1 min-w-[28px] max-w-[55px] flex flex-col items-center gap-1 group cursor-pointer h-full justify-end"
               >
@@ -2299,13 +2299,13 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
                   className="w-full bg-slate-100 dark:bg-slate-800 rounded-t-md overflow-hidden flex flex-col-reverse shadow-inner transition-all group-hover:scale-105"
                   style={{ height: `${heightPercent}%` }}
                 >
-                  {activeCrimes.map((cr) => {
+                  {activeCrimes.map((cr, crIdx) => {
                     const count = psData.counts[cr] || 0;
                     if (count === 0) return null;
                     const segmentHeight = (count / (psData.total || 1)) * 100;
                     return (
                       <div
-                        key={cr}
+                        key={`ps-seg-${cr}-${crIdx}`}
                         style={{
                           height: `${segmentHeight}%`,
                           backgroundColor: CRIME_COLORS[cr] || '#94a3b8',
@@ -2325,8 +2325,8 @@ export const CrimeSpectrumComparison: React.FC<CrimeSpectrumComparisonProps> = (
 
         {/* Legend Ribbon matching bottom of screenshot */}
         <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-          {activeCrimes.map((cr) => (
-            <div key={cr} className="flex items-center gap-1">
+          {activeCrimes.map((cr, idx) => (
+            <div key={`legend-ps-${cr}-${idx}`} className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CRIME_COLORS[cr] }} />
               <span>{cr}</span>
             </div>
