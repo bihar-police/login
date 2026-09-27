@@ -983,12 +983,28 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
 
   // Re-invalidate map size whenever fullscreen mode changes
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const triggerResize = () => {
       if (leafletMapRef.current) {
-        leafletMapRef.current.invalidateSize();
+        leafletMapRef.current.invalidateSize({ pan: false, debounceMoveend: true });
       }
-    }, 200);
-    return () => clearTimeout(timer);
+    };
+
+    // Immediate frame
+    triggerResize();
+    requestAnimationFrame(triggerResize);
+
+    // Staggered timers to ensure layout transitions and tile fetches are fully loaded
+    const t1 = setTimeout(triggerResize, 50);
+    const t2 = setTimeout(triggerResize, 150);
+    const t3 = setTimeout(triggerResize, 350);
+    const t4 = setTimeout(triggerResize, 600);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+    };
   }, [isFullscreen]);
 
   // Handle ESC key to exit fullscreen
@@ -1494,15 +1510,15 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
         
         {/* Left Column: Interactive GIS Map */}
         <div
-          className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden flex flex-col transition-all duration-300 ${
+          className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden flex flex-col ${
             isFullscreen
-              ? 'fixed inset-0 z-[9999] rounded-none border-none h-screen w-screen'
+              ? 'fixed inset-0 z-[9999] rounded-none border-none h-screen w-screen bg-slate-950'
               : 'lg:col-span-8'
           }`}
         >
           
           {/* Map Top Status Bar */}
-          <div className="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between text-xs border-b border-slate-800 flex-wrap gap-2">
+          <div className="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between text-xs border-b border-slate-800 flex-wrap gap-2 shrink-0">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="font-bold text-slate-300">Live Spatial GIS Stream</span>
@@ -1562,13 +1578,16 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
           {/* Leaflet Canvas Container */}
           <div
             ref={mapContainerRef}
-            className={`w-full bg-slate-100 dark:bg-slate-950 relative z-10 ${
-              isFullscreen ? 'flex-1 h-[calc(100vh-80px)] min-h-0' : 'min-h-[520px] h-[600px]'
-            }`}
+            style={
+              isFullscreen
+                ? { height: 'calc(100vh - 84px)', width: '100vw', minHeight: '400px' }
+                : { height: '600px', minHeight: '520px', width: '100%' }
+            }
+            className="w-full bg-slate-900 relative z-10"
           />
 
           {/* Map Bottom Coordinates & SOP Indicator */}
-          <div className="bg-slate-50 dark:bg-slate-950/90 px-4 py-2 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between flex-wrap gap-2">
+          <div className="bg-slate-50 dark:bg-slate-950/90 px-4 py-2 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between flex-wrap gap-2 shrink-0">
             <span className="flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-amber-500" />
               <span>Bihar Police Spatial Coordinate Reference (EPSG:4326 / WGS84)</span>
