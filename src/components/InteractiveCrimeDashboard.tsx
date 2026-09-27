@@ -1030,11 +1030,11 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
                 >
                   All Stations ({psNamesList.length})
                 </button>
-                {psNamesList.map((ps) => {
+                {psNamesList.map((ps, idx) => {
                   const isSelected = selectedPS.toLowerCase() === ps.toLowerCase();
                   return (
                     <button
-                      key={ps}
+                      key={`${ps}-${idx}`}
                       type="button"
                       onClick={() => setSelectedPS(ps)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
@@ -1545,8 +1545,8 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
                   <tr>
                     <th className="py-3 px-4">Crime Head</th>
                     <th className="py-3 px-3">Category</th>
-                    {psNamesList.map((ps) => (
-                      <th key={ps} className="py-3 px-3 text-center">
+                    {psNamesList.map((ps, idx) => (
+                      <th key={`ps-head-${ps}-${idx}`} className="py-3 px-3 text-center">
                         {ps} PS
                       </th>
                     ))}
@@ -1569,7 +1569,7 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
                           {meta.category}
                         </td>
 
-                        {psNamesList.map((ps) => {
+                        {psNamesList.map((ps, psIdx) => {
                           const count = psMatrixData[ps] ? psMatrixData[ps][headId] || 0 : 0;
                           const matchingCases = filteredCases.filter(
                             (c) =>
@@ -1579,7 +1579,7 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
 
                           return (
                             <td
-                              key={ps}
+                              key={`ps-cell-${ps}-${psIdx}`}
                               onClick={() => {
                                 if (count > 0) {
                                   handleOpenDrilldown(`${meta.name} at ${ps} PS (${count})`, matchingCases);
@@ -1662,7 +1662,7 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-medium">
                   {ioPerformanceData.map((ioItem, idx) => (
-                    <tr key={ioItem.name} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition group">
+                    <tr key={(ioItem as any).id || `io-perf-${ioItem.name}-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition group">
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] font-black flex items-center justify-center text-slate-700 dark:text-slate-300">
                           {idx + 1}
@@ -2099,7 +2099,7 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
 
                     return rows.map(({ head, meta, stat }, idx) => {
                       return (
-                        <tr key={head} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition group">
+                        <tr key={`crime-head-${head}-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition group">
                           <td className="py-3 px-3 text-center font-black text-slate-400">
                             {idx + 1}
                           </td>
