@@ -981,6 +981,27 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
     }
   };
 
+  // Re-invalidate map size whenever fullscreen mode changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.invalidateSize();
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [isFullscreen]);
+
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
   // Reset Map View to default extent
   const handleResetView = () => {
     const L = getLeaflet();
@@ -996,7 +1017,7 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
   };
 
   return (
-    <div className={`space-y-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-slate-950 p-4 overflow-y-auto' : ''}`}>
+    <div className="space-y-4">
       
       {/* Top Banner & Spatial Tactical Command Header */}
       <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 text-white p-5 rounded-3xl border border-indigo-500/20 shadow-2xl flex flex-col xl:flex-row xl:items-center justify-between gap-4 relative overflow-hidden">
@@ -1453,11 +1474,13 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold flex items-center gap-1 transition cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm text-xs"
+              title={isFullscreen ? 'Exit Full Screen Map' : 'Expand Only Map to Full Screen'}
             >
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+              <span>{isFullscreen ? 'Exit Map Full Screen' : 'Map Full Screen'}</span>
             </button>
 
           </div>
@@ -1470,7 +1493,13 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         
         {/* Left Column: Interactive GIS Map */}
-        <div className="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden flex flex-col">
+        <div
+          className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden flex flex-col transition-all duration-300 ${
+            isFullscreen
+              ? 'fixed inset-0 z-[9999] rounded-none border-none h-screen w-screen'
+              : 'lg:col-span-8'
+          }`}
+        >
           
           {/* Map Top Status Bar */}
           <div className="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between text-xs border-b border-slate-800 flex-wrap gap-2">
@@ -1479,9 +1508,14 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
               <span className="font-bold text-slate-300">Live Spatial GIS Stream</span>
               <span className="text-slate-600">•</span>
               <span className="text-amber-400 font-mono font-bold">{filteredPoints.length} Crimes Displayed</span>
+              {isFullscreen && (
+                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                  Full Screen Map Mode
+                </span>
+              )}
             </div>
 
-            {/* Quick Map Legend */}
+            {/* Quick Map Legend & Fullscreen Close/Controls */}
             <div className="flex items-center gap-3 text-[11px] flex-wrap">
               <span className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span> Heinous / SR
@@ -1498,13 +1532,39 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
               <span className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-full bg-sky-500"></span> Land Disputes
               </span>
+
+              {/* Direct Fullscreen Exit / Toggle Button on Map Header */}
+              <button
+                type="button"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className={`ml-2 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-xs ${
+                  isFullscreen
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                }`}
+                title={isFullscreen ? 'Exit Full Screen Map' : 'View Only Map in Full Screen'}
+              >
+                {isFullscreen ? (
+                  <>
+                    <Minimize2 className="w-3.5 h-3.5" />
+                    <span>Exit Full Screen</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Map Full Screen</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
           {/* Leaflet Canvas Container */}
           <div
             ref={mapContainerRef}
-            className="w-full min-h-[520px] h-[600px] bg-slate-100 dark:bg-slate-950 relative z-10"
+            className={`w-full bg-slate-100 dark:bg-slate-950 relative z-10 ${
+              isFullscreen ? 'flex-1 h-[calc(100vh-80px)] min-h-0' : 'min-h-[520px] h-[600px]'
+            }`}
           />
 
           {/* Map Bottom Coordinates & SOP Indicator */}
@@ -1513,9 +1573,20 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
               <Compass className="w-3.5 h-3.5 text-amber-500" />
               <span>Bihar Police Spatial Coordinate Reference (EPSG:4326 / WGS84)</span>
             </span>
-            <span className="font-mono text-slate-600 dark:text-slate-400">
-              Click any pulsating cluster or pin to inspect case dossier & PO specifics
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-slate-600 dark:text-slate-400">
+                Click any pulsating cluster or pin to inspect case dossier
+              </span>
+              {isFullscreen && (
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(false)}
+                  className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-[10px] cursor-pointer"
+                >
+                  ESC / Close
+                </button>
+              )}
+            </div>
           </div>
 
         </div>
