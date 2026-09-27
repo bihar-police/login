@@ -269,8 +269,8 @@ export const DeadlineMonitor: React.FC<DeadlineMonitorProps> = ({
             className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-1.5 font-semibold text-xs"
           >
             <option value="ALL">All Police Stations ({psOptions.length})</option>
-            {psOptions.map((st) => (
-              <option key={st} value={st}>
+            {psOptions.map((st, idx) => (
+              <option key={`${st}-${idx}`} value={st}>
                 {st} PS
               </option>
             ))}
