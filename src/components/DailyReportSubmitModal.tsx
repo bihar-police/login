@@ -546,8 +546,8 @@ interface EnhancedCaseArrestItem {
                   disabled={!modalIsSuperUser && Boolean(defaultPS)}
                   className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-slate-900 dark:text-white disabled:opacity-75"
                 >
-                  {psOptions.map((st) => (
-                    <option key={st} value={st}>
+                  {psOptions.map((st, idx) => (
+                    <option key={`${st}-${idx}`} value={st}>
                       {st} PS
                     </option>
                   ))}
@@ -689,8 +689,8 @@ interface EnhancedCaseArrestItem {
                           className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-medium"
                         >
                           <option value="">Select {ps} PS Officer...</option>
-                          {psOfficers.map((io) => (
-                            <option key={io.id} value={io.name}>
+                          {psOfficers.map((io, idx) => (
+                            <option key={io.id || `${io.name}-${idx}`} value={io.name}>
                               {io.name} ({io.rank})
                             </option>
                           ))}
@@ -796,9 +796,9 @@ interface EnhancedCaseArrestItem {
                         <div>
                           {(fir.accusedNames || []).length > 0 ? (
                             <div className="flex flex-wrap gap-1.5 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
-                              {(fir.accusedNames || []).map((name) => (
+                              {(fir.accusedNames || []).map((name, nameIdx) => (
                                 <span
-                                  key={name}
+                                  key={`${name}-${nameIdx}`}
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
                                 >
                                   <span>{name}</span>
@@ -895,8 +895,8 @@ interface EnhancedCaseArrestItem {
                         className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-bold text-xs"
                       >
                         <option value="">Select Officer for {shift.shiftName}...</option>
-                        {psOfficers.map((io) => (
-                          <option key={io.id} value={io.name}>
+                        {psOfficers.map((io, oIdx) => (
+                          <option key={io.id || `od-io-${io.name}-${oIdx}`} value={io.name}>
                             {io.name} ({io.rank}) {io.phone ? `— ${io.phone}` : ''}
                           </option>
                         ))}
@@ -985,8 +985,8 @@ interface EnhancedCaseArrestItem {
                         className="w-full p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white font-bold text-xs"
                       >
                         <option value="">Select Officer for {shift.shiftName}...</option>
-                        {psOfficers.map((io) => (
-                          <option key={io.id} value={io.name}>
+                        {psOfficers.map((io, oIdx) => (
+                          <option key={io.id || `gasti-io-${io.name}-${oIdx}`} value={io.name}>
                             {io.name} ({io.rank}) {io.phone ? `— ${io.phone}` : ''}
                           </option>
                         ))}
@@ -1254,9 +1254,9 @@ interface EnhancedCaseArrestItem {
                             {/* Display Manual Names */}
                             {ca.manualAccusedNames && ca.manualAccusedNames.length > 0 && (
                               <div className="flex flex-wrap gap-1.5 pt-1">
-                                {ca.manualAccusedNames.map((name) => (
+                                {ca.manualAccusedNames.map((name, mIdx) => (
                                   <span
-                                    key={name}
+                                    key={`${name}-${mIdx}`}
                                     className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900 rounded-lg font-bold"
                                   >
                                     <span>{name} (Manual)</span>
@@ -1499,8 +1499,8 @@ interface EnhancedCaseArrestItem {
                                 className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-xs"
                               >
                                 <option value="">Select Officer...</option>
-                                {nonConstableOfficers.map((io) => (
-                                  <option key={io.id} value={io.name}>
+                                {nonConstableOfficers.map((io, idx) => (
+                                  <option key={io.id || `depart-io-${io.name}-${idx}`} value={io.name}>
                                     {io.name} ({io.rank})
                                   </option>
                                 ))}
