@@ -35,6 +35,10 @@ import {
   formatReadableDate,
 } from '../utils/helpers';
 import {
+  getSubdivisionForPS,
+  getDistrictForPS,
+} from '../utils/jurisdictionHelpers';
+import {
   BarChart3,
   Shield,
   ShieldAlert,
@@ -277,6 +281,56 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
       return { ...c, crimeHead: classifyCrimeHead(c, statutoryConfig) };
     });
   }, [masterCases, statutoryConfig]);
+
+  // Cases strictly scoped to the user's login level (PS, Subdivision, District, or Administrator)
+  const loginLevelScopedCases = useMemo(() => {
+    return enrichedCases.filter((c) => {
+      // 1. Station level lock
+      if (isPSLevel && activeRolePS) {
+        return c.ps.toLowerCase() === activeRolePS.toLowerCase();
+      }
+      // 2. Subdivisional level lock
+      if (isSubdivisionLevel) {
+        const cSubdiv = c.subdivision || getSubdivisionForPS(c.ps, availablePoliceStations);
+        return cSubdiv.toLowerCase() === userSubdivision.toLowerCase();
+      }
+      // 3. District level lock
+      if (isDistrictLevel) {
+        const cDist = c.district || getDistrictForPS(c.ps, availablePoliceStations);
+        if (cDist.toLowerCase() !== userDistrict.toLowerCase()) return false;
+        if (selectedSubdivision && selectedSubdivision !== 'ALL') {
+          const cSubdiv = c.subdivision || getSubdivisionForPS(c.ps, availablePoliceStations);
+          if (cSubdiv.toLowerCase() !== selectedSubdivision.toLowerCase()) return false;
+        }
+        return true;
+      }
+      // 4. Administrator level: respect selected jurisdiction filter if set
+      if (isAdministrator) {
+        if (selectedDistrict && selectedDistrict !== 'ALL') {
+          const cDist = c.district || getDistrictForPS(c.ps, availablePoliceStations);
+          if (cDist.toLowerCase() !== selectedDistrict.toLowerCase()) return false;
+        }
+        if (selectedSubdivision && selectedSubdivision !== 'ALL') {
+          const cSubdiv = c.subdivision || getSubdivisionForPS(c.ps, availablePoliceStations);
+          if (cSubdiv.toLowerCase() !== selectedSubdivision.toLowerCase()) return false;
+        }
+        return true;
+      }
+      return true;
+    });
+  }, [
+    enrichedCases,
+    isPSLevel,
+    activeRolePS,
+    isSubdivisionLevel,
+    userSubdivision,
+    isDistrictLevel,
+    userDistrict,
+    selectedSubdivision,
+    isAdministrator,
+    selectedDistrict,
+    availablePoliceStations,
+  ]);
 
   // Filtered cases for the primary view
   const filteredCases = useMemo(() => {
@@ -2558,7 +2612,7 @@ export const InteractiveCrimeDashboard: React.FC<InteractiveCrimeDashboardProps>
       {/* ========================================================================= */}
       {activeTab === 'GENERATE_REPORT' && (
         <CustomReportGenerator
-          cases={enrichedMasterCases}
+          cases={loginLevelScopedCases}
           ios={ios}
           currentRole={currentRole}
           currentUserAccount={currentUserAccount}
