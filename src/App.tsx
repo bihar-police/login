@@ -29,7 +29,7 @@ import {
   INITIAL_SUBDIVISIONS,
   INITIAL_POLICE_STATIONS,
 } from './data/mockData';
-import { getDeadlineInfo, getPSFromRole, matchesCaseFullDatabaseSearch, isCaseChargesheetedOrFinalForm } from './utils/helpers';
+import { getDeadlineInfo, getPSFromRole, matchesCaseFullDatabaseSearch, isCaseChargesheetedOrFinalForm, getAccusedPipelineStats } from './utils/helpers';
 import { Header } from './components/Header';
 import { DashboardStats } from './components/DashboardStats';
 import { FIRFilterBar } from './components/FIRFilterBar';
@@ -1017,17 +1017,16 @@ export default function App() {
             });
 
             // C: Recalculate counts & string rosters
-            const arrested = list.filter((a) => a.status === 'Arrested');
-            const toArrest = list.filter((a) => a.status !== 'Arrested');
+            const stats = getAccusedPipelineStats({ accusedList: list });
 
             targetCase.accusedList = list;
-            targetCase.arrestedCount = arrested.length;
-            targetCase.arrestedNames = arrested.map((a) => a.name).join(', ');
-            targetCase.anyPersonArrested = arrested.length > 0;
+            targetCase.arrestedCount = stats.arrestedCount;
+            targetCase.arrestedNames = stats.arrestedNames;
+            targetCase.anyPersonArrested = stats.hasArrested;
 
-            targetCase.pendingArrestCount = toArrest.length;
-            targetCase.pendingArrestNames = toArrest.map((a) => a.name).join(', ');
-            targetCase.pendingForArrest = toArrest.length > 0;
+            targetCase.pendingArrestCount = stats.pendingCount;
+            targetCase.pendingArrestNames = stats.pendingNames;
+            targetCase.pendingForArrest = stats.hasPending;
 
             updatedCases[matchedCaseIdx] = targetCase;
             saveFIRCaseToSupabase(targetCase);
