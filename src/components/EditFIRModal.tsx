@@ -314,7 +314,7 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
     // 1. Arrested list
     const arrested = list.filter((a) => {
       const s = (a.status || '').toLowerCase();
-      return s.includes('arrested') && !s.includes('not arrested') && !s.includes('order');
+      return s.includes('arrested') && !s.includes('not arrested');
     });
 
     // 2. Notice Served (41A CrPC / Sec 35 BNSS)
@@ -330,7 +330,7 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
     // Any accused not arrested, not notice served, not bailed/surrendered, and not removed
     const toArrest = list.filter((a) => {
       const s = (a.status || '').toLowerCase();
-      if (s.includes('arrested') && !s.includes('order')) return false;
+      if (s.includes('arrested') && !s.includes('not arrested')) return false;
       if (s.includes('notice')) return false;
       if (s.includes('bail') || s.includes('surrender')) return false;
       if (s.includes('removed')) return false;
