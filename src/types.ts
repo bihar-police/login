@@ -146,6 +146,10 @@ export interface FIRCase {
   complainantName: string;
   complainantPhone?: string;
   placeOfOccurrence: string; // Village / Landmark / Ward
+  poAddress?: string; // Specific address / landmark
+  grNumber?: string; // Grid Reference (e.g. "GR-84729" or "25.2345, 86.6452")
+  latitude?: number; // PO Latitude
+  longitude?: number; // PO Longitude
   ioName: string; // Selected from IO drop-down
   designation: CaseDesignation; // Decided ONLY by Super User (SDPO)
   designationDate?: string;
