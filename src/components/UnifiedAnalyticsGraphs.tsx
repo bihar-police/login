@@ -390,11 +390,16 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
 
         totalDuties: number;
 
-        // Arrests & Accused Forwarded
+        // Arrests & Accused Breakdown
         totalArrests: number;
         heinousArrests: number;
         exciseArrests: number;
         otherArrests: number;
+
+        // Comprehensive Legal & Process Actions
+        personToBeArrested: number; // Accused persons required to be arrested
+        arrestPending: number; // Accused persons where arrest is still pending
+        noticeServed: number; // Notice served under Sec 41A CrPC / Sec 35 BNSS
 
         // Leaves availed
         leaveDaysConsumed: number;
@@ -403,10 +408,16 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
         otherLeaveDays: number;
         isOnLeaveNow: boolean;
 
-        // Case Disposal & Workload
+        // Case Disposal & Workload (with SR / Non-SR segregation)
         casesGiven: number;
+        casesGivenSR: number;
+        casesGivenNonSR: number;
         casesDisposed: number;
+        casesDisposedSR: number;
+        casesDisposedNonSR: number;
         casesPending: number;
+        casesPendingSR: number;
+        casesPendingNonSR: number;
         casesOverdue: number;
         disposalRate: number;
 
@@ -434,14 +445,23 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
         heinousArrests: 0,
         exciseArrests: 0,
         otherArrests: 0,
+        personToBeArrested: 0,
+        arrestPending: 0,
+        noticeServed: 0,
         leaveDaysConsumed: 0,
         clDays: 0,
         cplDays: 0,
         otherLeaveDays: 0,
         isOnLeaveNow: false,
         casesGiven: 0,
+        casesGivenSR: 0,
+        casesGivenNonSR: 0,
         casesDisposed: 0,
+        casesDisposedSR: 0,
+        casesDisposedNonSR: 0,
         casesPending: 0,
+        casesPendingSR: 0,
+        casesPendingNonSR: 0,
         casesOverdue: 0,
         disposalRate: 0,
         performanceScore360: 0,
@@ -526,30 +546,50 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
       }
     });
 
-    // Populate Case Disposal, Accused Arrests from Cases
+    // Populate Case Disposal, Accused Arrests, Notice Served, and Pending Statistics from Cases
     filteredCases.forEach((c) => {
       if (!c.ioName || !map[c.ioName.trim()]) return;
       const target = map[c.ioName.trim()];
       target.casesGiven++;
 
-      if (
+      const isSR = c.designation === 'SR';
+      if (isSR) {
+        target.casesGivenSR++;
+      } else {
+        target.casesGivenNonSR++;
+      }
+
+      const isDisposed =
         c.status === 'Chargesheeted / Final Form Submitted' ||
         c.status === 'Disposed' ||
         c.status === 'Chargesheeted / Final Form Submitted / Mistake of Fact' ||
-        c.status === 'False Case / Mistake of Fact'
-      ) {
+        c.status === 'False Case / Mistake of Fact';
+
+      if (isDisposed) {
         target.casesDisposed++;
+        if (isSR) {
+          target.casesDisposedSR++;
+        } else {
+          target.casesDisposedNonSR++;
+        }
       } else {
         target.casesPending++;
+        if (isSR) {
+          target.casesPendingSR++;
+        } else {
+          target.casesPendingNonSR++;
+        }
       }
 
       if (getDeadlineInfo(c).code === 'OVERDUE') target.casesOverdue++;
 
-      // Count Arrests from Accused List or FIRCase fields
+      // 1. Accused Arrests Made (Accused Forwarded)
       let caseArrestCount = 0;
       if (c.accusedList && c.accusedList.length > 0) {
         c.accusedList.forEach((acc) => {
-          if ((acc.status || '').toLowerCase().includes('arrest')) caseArrestCount++;
+          if ((acc.status || '').toLowerCase().includes('arrested') || (acc.status || '').toLowerCase() === 'arrest') {
+            caseArrestCount++;
+          }
         });
       } else if (c.arrestedCount && c.arrestedCount > 0) {
         caseArrestCount = c.arrestedCount;
@@ -560,7 +600,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
       if (caseArrestCount > 0) {
         target.totalArrests += caseArrestCount;
         const isHeinous =
-          c.designation === 'SR' ||
+          isSR ||
           (c.crimeHead || '').toLowerCase().includes('murder') ||
           (c.crimeHead || '').toLowerCase().includes('dacoity') ||
           (c.crimeHead || '').toLowerCase().includes('robbery') ||
@@ -574,13 +614,70 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
         else if (isExcise) target.exciseArrests += caseArrestCount;
         else target.otherArrests += caseArrestCount;
       }
+
+      // 2. Person to be Arrested (Accused ordered/required to be arrested)
+      let casePersonToBeArrested = 0;
+      if (c.accusedList && c.accusedList.length > 0) {
+        c.accusedList.forEach((acc) => {
+          const st = (acc.status || '').toLowerCase();
+          if (
+            st.includes('arresting order') ||
+            st.includes('charge true') ||
+            st.includes('arrested') ||
+            st === 'arrest'
+          ) {
+            casePersonToBeArrested++;
+          }
+        });
+      }
+      // If no explicit accused list status, compute from pendingArrestCount + arrestedCount or total accused required
+      if (casePersonToBeArrested === 0) {
+        const pendingCount = c.pendingArrestCount || (c.pendingForArrest ? 1 : 0);
+        casePersonToBeArrested = caseArrestCount + pendingCount;
+      }
+      target.personToBeArrested += casePersonToBeArrested;
+
+      // 3. Arrest Pending (Accused persons where arrest is still pending)
+      let caseArrestPending = 0;
+      if (c.accusedList && c.accusedList.length > 0) {
+        c.accusedList.forEach((acc) => {
+          const st = (acc.status || '').toLowerCase();
+          if (
+            st.includes('arresting order') ||
+            (st.includes('charge true') && !st.includes('arrested'))
+          ) {
+            caseArrestPending++;
+          }
+        });
+      }
+      if (caseArrestPending === 0) {
+        if (c.pendingArrestCount && c.pendingArrestCount > 0) {
+          caseArrestPending = c.pendingArrestCount;
+        } else if (c.pendingForArrest) {
+          caseArrestPending = 1;
+        } else if (casePersonToBeArrested > caseArrestCount) {
+          caseArrestPending = casePersonToBeArrested - caseArrestCount;
+        }
+      }
+      target.arrestPending += caseArrestPending;
+
+      // 4. Notice Served (Sec 41A CrPC / Sec 35 BNSS Notice Served)
+      let caseNoticeServed = 0;
+      if (c.noticeServedCount && c.noticeServedCount > 0) {
+        caseNoticeServed = c.noticeServedCount;
+      } else if (c.anyPersonServedNotice) {
+        caseNoticeServed = 1;
+      }
+      target.noticeServed += caseNoticeServed;
     });
 
     // Compute clearance % and IO 360° Composite Performance Index
+    // NOTE: Pending cases or pending arrests have NO negative impact on performance score
     Object.values(map).forEach((io) => {
       io.disposalRate = io.casesGiven > 0 ? Math.round((io.casesDisposed / io.casesGiven) * 100) : 0;
 
       // Composite Index: 30% duty attendance + 30% case clearance + 25% arrests made + 15% promptness
+      // Pending cases and pending arrests have 0 penalty on the performance score
       const dutyScore = Math.min(io.totalDuties * 8, 30);
       const clearanceScore = Math.round(io.disposalRate * 0.3);
       const arrestScore = Math.min(io.totalArrests * 6, 25);
@@ -1001,27 +1098,27 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
     // 10. IO ARRESTS COMPARISON
     if (selectedSource === 'IO_ARRESTS_COMPARISON') {
       title = 'IO-Wise Accused Arresting Comparison (Forwarded to Court)';
-      subtitle = 'Comparative ranking of total accused arrests made and forwarded by Investigating Officers';
+      subtitle = 'Comparative ranking of total accused arrests made, accused to be arrested, and pending arrests across Investigating Officers';
       legendGuide = [
-        { label: '🔥 Heinous / SR Arrests', color: '#ef4444' },
-        { label: '🍷 Special / Excise Arrests', color: '#8b5cf6' },
-        { label: '📋 Other Arrests', color: '#3b82f6' },
+        { label: '🎯 To Be Arrested', color: '#f59e0b' },
+        { label: '✅ Arrests Made', color: '#10b981' },
+        { label: '⏳ Arrest Pending', color: '#ef4444' },
       ];
 
       const totalArrests = targetIOList.reduce((a, b) => a + b.totalArrests, 0) || 1;
       slices = targetIOList
-        .filter((io) => io.totalArrests > 0 || selectedIOsForComparison.includes(io.name))
-        .sort((a, b) => b.totalArrests - a.totalArrests)
+        .filter((io) => io.totalArrests > 0 || io.personToBeArrested > 0 || selectedIOsForComparison.includes(io.name))
+        .sort((a, b) => b.totalArrests - a.totalArrests || b.personToBeArrested - a.personToBeArrested)
         .slice(0, 16)
         .map((io, idx) => ({
           label: `${io.name} (${io.rank})`,
           value: io.totalArrests,
           color: COLOR_PALETTE[idx % COLOR_PALETTE.length],
           percentage: Math.round((io.totalArrests / totalArrests) * 100),
-          sublabel: `Total Arrests: ${io.totalArrests} (🔥Hein: ${io.heinousArrests} | 🍷Exc: ${io.exciseArrests} | Other: ${io.otherArrests}) [${io.ps}]`,
-          metric1: { name: 'Heinous/SR', val: io.heinousArrests, color: '#ef4444' },
-          metric2: { name: 'Excise/Special', val: io.exciseArrests, color: '#8b5cf6' },
-          metric3: { name: 'Other Offences', val: io.otherArrests, color: '#3b82f6' },
+          sublabel: `Arrests Made: ${io.totalArrests}/${io.personToBeArrested || io.totalArrests} to be arrested | Pending: ${io.arrestPending} | Notices: ${io.noticeServed} [${io.ps}]`,
+          metric1: { name: 'To Be Arrested', val: io.personToBeArrested, color: '#f59e0b' },
+          metric2: { name: 'Arrests Made', val: io.totalArrests, color: '#10b981' },
+          metric3: { name: 'Pending Arrests', val: io.arrestPending, color: '#ef4444' },
         }));
       return { title, subtitle, slices, total: targetIOList.reduce((a, b) => a + b.totalArrests, 0), legendGuide };
     }
@@ -1029,7 +1126,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
     // 11. IO CASE DISPOSAL
     if (selectedSource === 'IO_CASE_DISPOSAL') {
       title = 'IO-Wise Case Disposal & Workload Clearance';
-      subtitle = 'Investigation clearance benchmark: Cases Allotted vs Disposed Chargesheets vs Active Pending';
+      subtitle = 'Investigation clearance benchmark: Cases Allotted vs Disposed (SR / Non-SR) vs Active Pending (SR / Non-SR)';
       legendGuide = [
         { label: 'Cases Given', color: '#3b82f6' },
         { label: 'Cases Disposed', color: '#10b981' },
@@ -1045,10 +1142,10 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
           value: io.casesDisposed,
           color: COLOR_PALETTE[idx % COLOR_PALETTE.length],
           percentage: Math.round((io.casesDisposed / (targetIOList.reduce((a, b) => a + b.casesDisposed, 0) || 1)) * 100),
-          sublabel: `Given: ${io.casesGiven} | Disposed: ${io.casesDisposed} | Pending: ${io.casesPending} (${io.disposalRate}% Clearance)`,
-          metric1: { name: 'Given', val: io.casesGiven, color: '#3b82f6' },
-          metric2: { name: 'Disposed', val: io.casesDisposed, color: '#10b981' },
-          metric3: { name: 'Pending', val: io.casesPending, color: '#f59e0b' },
+          sublabel: `Disposed: ${io.casesDisposed} (${io.casesDisposedSR} SR / ${io.casesDisposedNonSR} NSR) | Pending: ${io.casesPending} (${io.casesPendingSR} SR / ${io.casesPendingNonSR} NSR) | ${io.disposalRate}% Clearance`,
+          metric1: { name: 'Cases Given', val: io.casesGiven, color: '#3b82f6' },
+          metric2: { name: 'Cases Disposed', val: io.casesDisposed, color: '#10b981' },
+          metric3: { name: 'Cases Pending', val: io.casesPending, color: '#f59e0b' },
         }));
       return { title, subtitle, slices, total: targetIOList.reduce((a, b) => a + b.casesDisposed, 0), legendGuide };
     }
@@ -1450,9 +1547,17 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
       'Evening OD',
       'Night OD',
       'Total Duties',
-      'Total Arrests',
-      'Cases Given',
-      'Cases Disposed',
+      'Person To Be Arrested',
+      'Total Arrests Made',
+      'Arrests Pending',
+      'Notice Served (41A/35)',
+      'Total Cases Given',
+      'Cases Disposed (Total)',
+      'Disposed (SR)',
+      'Disposed (Non-SR)',
+      'Cases Pending (Total)',
+      'Pending (SR)',
+      'Pending (Non-SR)',
       'Clearance %',
       '360 Score',
     ];
@@ -1467,9 +1572,17 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
       io.eveOD,
       io.nightOD,
       io.totalDuties,
+      io.personToBeArrested,
       io.totalArrests,
+      io.arrestPending,
+      io.noticeServed,
       io.casesGiven,
       io.casesDisposed,
+      io.casesDisposedSR,
+      io.casesDisposedNonSR,
+      io.casesPending,
+      io.casesPendingSR,
+      io.casesPendingNonSR,
       `${io.disposalRate}%`,
       `${io.performanceScore360}/100`,
     ]);
@@ -2641,83 +2754,148 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
               </span>
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Click any column header to sort officers by specific shift duties, arrests, disposals, or composite performance scores.
+              Comprehensive operational tracking: Shift Duties, Person to be Arrested vs Arrests Made, Arrests Pending, 41A/35 Notices Served, and SR / Non-SR Case Disposals & Pendency. (Note: Pending figures do not penalize 360° score).
             </p>
           </div>
 
           <button
             type="button"
             onClick={handleExportDataCSV}
-            className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer"
+            className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer shadow-2xs"
           >
             <Download className="w-3.5 h-3.5 text-indigo-500" />
             <span>Export Table (.xlsx)</span>
           </button>
         </div>
 
-        <div className="overflow-x-auto max-h-[500px]">
+        <div className="overflow-x-auto max-h-[560px]">
           <table className="w-full text-left text-xs border-collapse">
-            <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10 text-slate-600 dark:text-slate-300 font-extrabold uppercase text-[10px]">
+            <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10 text-slate-600 dark:text-slate-300 font-extrabold uppercase text-[10px] shadow-2xs">
               <tr>
-                <th onClick={() => handleSort('name')} className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+                <th onClick={() => handleSort('name')} className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700/60">
                   <div className="flex items-center gap-1"><span>Officer Name & PS</span><ArrowUpDown className="w-3 h-3" /></div>
                 </th>
-                <th onClick={() => handleSort('dayGasti')} className="p-3 cursor-pointer hover:bg-slate-200 text-center">
-                  <div className="flex items-center justify-center gap-1"><span>🏃 Day Gasti</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('dayGasti')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center" title="Morning / Day Gasti Shift">
+                  <div className="flex items-center justify-center gap-0.5"><span>🏃 Day Gasti</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('eveGasti')} className="p-3 cursor-pointer hover:bg-slate-200 text-center">
-                  <div className="flex items-center justify-center gap-1"><span>🏃 Eve Gasti</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('eveGasti')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center" title="Evening / Mobile Gasti Shift">
+                  <div className="flex items-center justify-center gap-0.5"><span>🏃 Eve Gasti</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('nightGasti')} className="p-3 cursor-pointer hover:bg-slate-200 text-center">
-                  <div className="flex items-center justify-center gap-1"><span>🚔 Night Gasti</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('nightGasti')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center" title="Night Nakabandi / Patrol Shift">
+                  <div className="flex items-center justify-center gap-0.5"><span>🚔 Night Gasti</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('dayOD')} className="p-3 cursor-pointer hover:bg-slate-200 text-center">
-                  <div className="flex items-center justify-center gap-1"><span>☀️ Day OD</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('dayOD')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center" title="Officer on Duty 06:00 - 14:00">
+                  <div className="flex items-center justify-center gap-0.5"><span>☀️ Day OD</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('eveOD')} className="p-3 cursor-pointer hover:bg-slate-200 text-center">
-                  <div className="flex items-center justify-center gap-1"><span>🌆 Eve OD</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('eveOD')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center" title="Officer on Duty 14:00 - 22:00">
+                  <div className="flex items-center justify-center gap-0.5"><span>🌆 Eve OD</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('nightOD')} className="p-3 cursor-pointer hover:bg-slate-200 text-center">
-                  <div className="flex items-center justify-center gap-1"><span>🌙 Night OD</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('nightOD')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center" title="Officer on Duty 22:00 - 06:00">
+                  <div className="flex items-center justify-center gap-0.5"><span>🌙 Night OD</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('totalArrests')} className="p-3 cursor-pointer hover:bg-slate-200 text-center bg-rose-50/60 dark:bg-rose-950/30">
-                  <div className="flex items-center justify-center gap-1 text-rose-700 dark:text-rose-300"><span>🎯 Arrests</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('totalDuties')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center bg-indigo-50/70 dark:bg-indigo-950/40 border-r border-indigo-200 dark:border-indigo-900/60" title="Total Gasti & OD Duties">
+                  <div className="flex items-center justify-center gap-0.5 text-indigo-700 dark:text-indigo-300"><span>Total Duties</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('totalDuties')} className="p-3 cursor-pointer hover:bg-slate-200 text-center bg-indigo-50/60 dark:bg-indigo-950/30">
-                  <div className="flex items-center justify-center gap-1 text-indigo-700 dark:text-indigo-300"><span>Total Duties</span><ArrowUpDown className="w-3 h-3" /></div>
+
+                {/* Accused & Process Metrics */}
+                <th onClick={() => handleSort('personToBeArrested')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center bg-amber-50/70 dark:bg-amber-950/30" title="Person To Be Arrested (Accused ordered/required to be arrested)">
+                  <div className="flex items-center justify-center gap-0.5 text-amber-700 dark:text-amber-300"><span>🎯 To Be Arrested</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('casesGiven')} className="p-3 cursor-pointer hover:bg-slate-200 text-center">
-                  <div className="flex items-center justify-center gap-1"><span>Given</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('totalArrests')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center bg-emerald-50/70 dark:bg-emerald-950/30" title="Total Accused Arrested & Forwarded">
+                  <div className="flex items-center justify-center gap-0.5 text-emerald-700 dark:text-emerald-300"><span>✅ Arrests Made</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('casesDisposed')} className="p-3 cursor-pointer hover:bg-slate-200 text-center">
-                  <div className="flex items-center justify-center gap-1"><span>Disposed</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('arrestPending')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center bg-rose-50/70 dark:bg-rose-950/30" title="Arrests Still Pending (No impact on 360° performance score)">
+                  <div className="flex items-center justify-center gap-0.5 text-rose-700 dark:text-rose-300"><span>⏳ Arrest Pending</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('disposalRate')} className="p-3 cursor-pointer hover:bg-slate-200 text-center">
-                  <div className="flex items-center justify-center gap-1"><span>Clearance %</span><ArrowUpDown className="w-3 h-3" /></div>
+                <th onClick={() => handleSort('noticeServed')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center bg-sky-50/70 dark:bg-sky-950/30 border-r border-slate-200 dark:border-slate-700/60" title="Notice Served under 41A CrPC / Sec 35 BNSS">
+                  <div className="flex items-center justify-center gap-0.5 text-sky-700 dark:text-sky-300"><span>📜 Notice Served</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
-                <th onClick={() => handleSort('performanceScore360')} className="p-3 cursor-pointer hover:bg-slate-200 text-center bg-violet-50/60 dark:bg-violet-950/30">
-                  <div className="flex items-center justify-center gap-1 text-violet-700 dark:text-violet-300"><span>⭐ 360° Score</span><ArrowUpDown className="w-3 h-3" /></div>
+
+                {/* Cases Given, Disposed (SR / NSR), Pending (SR / NSR) */}
+                <th onClick={() => handleSort('casesGiven')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center" title="Total Cases Allotted / Given">
+                  <div className="flex items-center justify-center gap-0.5"><span>Given (SR/NSR)</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
+                </th>
+                <th onClick={() => handleSort('casesDisposed')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center bg-emerald-50/40 dark:bg-emerald-950/20" title="Disposed Cases (Total & SR / NSR breakdown)">
+                  <div className="flex items-center justify-center gap-0.5 text-emerald-800 dark:text-emerald-300"><span>Disposed (SR/NSR)</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
+                </th>
+                <th onClick={() => handleSort('casesPending')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center bg-amber-50/40 dark:bg-amber-950/20" title="Pending Cases (Total & SR / NSR breakdown - No impact on 360° performance score)">
+                  <div className="flex items-center justify-center gap-0.5 text-amber-800 dark:text-amber-300"><span>Pending (SR/NSR)</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
+                </th>
+                <th onClick={() => handleSort('disposalRate')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center" title="Case Clearance Percentage">
+                  <div className="flex items-center justify-center gap-0.5"><span>Clearance %</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
+                </th>
+                <th onClick={() => handleSort('performanceScore360')} className="p-2.5 cursor-pointer hover:bg-slate-200 text-center bg-violet-50/70 dark:bg-violet-950/40" title="Composite 360° Performance Index (Duties + Arrests + Clearance + Promptness)">
+                  <div className="flex items-center justify-center gap-0.5 text-violet-700 dark:text-violet-300"><span>⭐ 360° Score</span><ArrowUpDown className="w-2.5 h-2.5" /></div>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {sortedIOMasterList.map((io, idx) => (
                 <tr key={(io as any).id || `master-io-${io.name}-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <td className="p-3">
+                  <td className="p-3 border-r border-slate-100 dark:border-slate-800">
                     <div className="font-black text-slate-900 dark:text-white">{io.name}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{io.rank} • {io.ps} PS</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{io.rank} • {io.ps} PS</div>
                   </td>
-                  <td className="p-3 text-center font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{io.dayGasti}</td>
-                  <td className="p-3 text-center font-bold tabular-nums text-cyan-600 dark:text-cyan-400">{io.eveGasti}</td>
-                  <td className="p-3 text-center font-bold tabular-nums text-rose-600 dark:text-rose-400">{io.nightGasti}</td>
-                  <td className="p-3 text-center font-bold tabular-nums text-blue-600 dark:text-blue-400">{io.dayOD}</td>
-                  <td className="p-3 text-center font-bold tabular-nums text-amber-600 dark:text-amber-400">{io.eveOD}</td>
-                  <td className="p-3 text-center font-bold tabular-nums text-purple-600 dark:text-purple-400">{io.nightOD}</td>
-                  <td className="p-3 text-center font-black tabular-nums bg-rose-50/40 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300">{io.totalArrests}</td>
-                  <td className="p-3 text-center font-black tabular-nums bg-indigo-50/40 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-300">{io.totalDuties}</td>
-                  <td className="p-3 text-center font-medium tabular-nums">{io.casesGiven}</td>
-                  <td className="p-3 text-center font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{io.casesDisposed}</td>
-                  <td className="p-3 text-center">
+                  <td className="p-2.5 text-center font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{io.dayGasti}</td>
+                  <td className="p-2.5 text-center font-bold tabular-nums text-cyan-600 dark:text-cyan-400">{io.eveGasti}</td>
+                  <td className="p-2.5 text-center font-bold tabular-nums text-rose-600 dark:text-rose-400">{io.nightGasti}</td>
+                  <td className="p-2.5 text-center font-bold tabular-nums text-blue-600 dark:text-blue-400">{io.dayOD}</td>
+                  <td className="p-2.5 text-center font-bold tabular-nums text-amber-600 dark:text-amber-400">{io.eveOD}</td>
+                  <td className="p-2.5 text-center font-bold tabular-nums text-purple-600 dark:text-purple-400">{io.nightOD}</td>
+                  <td className="p-2.5 text-center font-black tabular-nums bg-indigo-50/40 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-300 border-r border-indigo-100 dark:border-indigo-950">
+                    {io.totalDuties}
+                  </td>
+
+                  {/* Accused & Process Details */}
+                  <td className="p-2.5 text-center font-black tabular-nums bg-amber-50/40 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300">
+                    <span className="px-1.5 py-0.5 rounded bg-amber-100/80 dark:bg-amber-900/60 font-black">
+                      {io.personToBeArrested}
+                    </span>
+                  </td>
+                  <td className="p-2.5 text-center font-black tabular-nums bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300">
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-100/80 dark:bg-emerald-900/60 font-black">
+                      {io.totalArrests}
+                    </span>
+                  </td>
+                  <td className="p-2.5 text-center font-black tabular-nums bg-rose-50/40 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300">
+                    <span className={`px-1.5 py-0.5 rounded font-black ${
+                      io.arrestPending > 0
+                        ? 'bg-rose-100/80 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200'
+                        : 'text-slate-400 dark:text-slate-500'
+                    }`}>
+                      {io.arrestPending}
+                    </span>
+                  </td>
+                  <td className="p-2.5 text-center font-black tabular-nums bg-sky-50/40 dark:bg-sky-950/20 text-sky-700 dark:text-sky-300 border-r border-slate-100 dark:border-slate-800">
+                    <span className={`px-1.5 py-0.5 rounded font-black ${
+                      io.noticeServed > 0
+                        ? 'bg-sky-100/80 dark:bg-sky-900/60 text-sky-800 dark:text-sky-200'
+                        : 'text-slate-400 dark:text-slate-500'
+                    }`}>
+                      {io.noticeServed}
+                    </span>
+                  </td>
+
+                  {/* Case Disposal & Workload with SR/NSR */}
+                  <td className="p-2.5 text-center font-medium tabular-nums">
+                    <div className="font-extrabold text-slate-800 dark:text-slate-200">{io.casesGiven}</div>
+                    <div className="text-[10px] text-slate-400 font-semibold">
+                      <span className="text-rose-600 dark:text-rose-400">{io.casesGivenSR} SR</span> / <span className="text-slate-500 dark:text-slate-400">{io.casesGivenNonSR} NSR</span>
+                    </div>
+                  </td>
+                  <td className="p-2.5 text-center font-bold tabular-nums bg-emerald-50/30 dark:bg-emerald-950/10">
+                    <div className="font-black text-emerald-700 dark:text-emerald-400">{io.casesDisposed}</div>
+                    <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-500">
+                      <span>{io.casesDisposedSR} SR</span> / <span>{io.casesDisposedNonSR} NSR</span>
+                    </div>
+                  </td>
+                  <td className="p-2.5 text-center font-bold tabular-nums bg-amber-50/30 dark:bg-amber-950/10">
+                    <div className="font-black text-amber-700 dark:text-amber-400">{io.casesPending}</div>
+                    <div className="text-[10px] font-semibold text-amber-600 dark:text-amber-500">
+                      <span>{io.casesPendingSR} SR</span> / <span>{io.casesPendingNonSR} NSR</span>
+                    </div>
+                  </td>
+                  <td className="p-2.5 text-center">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tabular-nums ${
                       io.disposalRate >= 75 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300' :
                       io.disposalRate >= 40 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300' :
@@ -2726,7 +2904,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
                       {io.disposalRate}%
                     </span>
                   </td>
-                  <td className="p-3 text-center">
+                  <td className="p-2.5 text-center bg-violet-50/40 dark:bg-violet-950/20">
                     <span className={`px-2.5 py-1 rounded-xl text-xs font-black tabular-nums ${
                       io.performanceScore360 >= 75 ? 'bg-violet-600 text-white shadow-xs' :
                       io.performanceScore360 >= 50 ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300' :
