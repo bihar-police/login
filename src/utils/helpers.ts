@@ -486,7 +486,7 @@ export function getAccusedPipelineStats(c: Partial<FIRCase> | null | undefined):
   // 1. Arrested list
   const arrestedFromList = list.filter((a) => {
     const s = (a.status || '').toLowerCase();
-    return s.includes('arrested') && !s.includes('not arrested') && !s.includes('order');
+    return s.includes('arrested') && !s.includes('not arrested');
   });
   const arrestedCount = Math.max(
     Number(c.arrestedCount || 0),
@@ -528,7 +528,7 @@ export function getAccusedPipelineStats(c: Partial<FIRCase> | null | undefined):
   // Accused who are explicitly in 'Arresting Order', or who are NOT arrested, NOT notice served, NOT bailed/surrendered, and NOT name removed
   const pendingFromList = list.filter((a) => {
     const s = (a.status || '').toLowerCase();
-    if (s.includes('arrested') && !s.includes('order')) return false;
+    if (s.includes('arrested') && !s.includes('not arrested')) return false;
     if (s.includes('notice')) return false;
     if (s.includes('bail') || s.includes('surrender')) return false;
     if (s.includes('removed')) return false;
