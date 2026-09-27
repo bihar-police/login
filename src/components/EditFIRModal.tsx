@@ -15,7 +15,7 @@ import {
   CrimeHead,
 } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
-import { getDeadlineInfo, formatReadableDate, getPSFromRole, normalizeReviewStatus } from '../utils/helpers';
+import { getDeadlineInfo, formatReadableDate, getPSFromRole, normalizeReviewStatus, getAccusedPipelineStats } from '../utils/helpers';
 import {
   CRIME_HEADS_CONFIG,
   ALL_CRIME_HEADS,
@@ -309,28 +309,32 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
   const [newAccusedName, setNewAccusedName] = useState('');
 
   const syncAccusedCountsAndStatus = (list: { id: string; name: string; status: string }[]) => {
-    // 1. Pending for Arresting: marked yes only when Arresting Order is checked AND Arrested is NOT checked (Arrested supersedes)
-    const toArrest = list.filter((a) => {
-      const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
-      return statuses.includes('Arresting Order') && !statuses.includes('Arrested');
-    });
+    if (!list || list.length === 0) return;
 
-    // 2. Arrested list
+    // 1. Arrested list
     const arrested = list.filter((a) => {
-      const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
-      return statuses.includes('Arrested');
+      const s = (a.status || '').toLowerCase();
+      return s.includes('arrested') && !s.includes('not arrested') && !s.includes('order');
     });
 
-    // 3. Notice Served list
-    const noticeServed = list.filter((a) => {
-      const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
-      return statuses.includes('Notice Served');
-    });
+    // 2. Notice Served (41A CrPC / Sec 35 BNSS)
+    const noticeServed = list.filter((a) => (a.status || '').toLowerCase().includes('notice'));
 
-    // 4. Bailed / Surrendered list
+    // 3. Bailed / Surrendered list
     const bailSurrendered = list.filter((a) => {
-      const statuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
-      return statuses.includes('Bailed/Surrendered');
+      const s = (a.status || '').toLowerCase();
+      return s.includes('bail') || s.includes('surrender');
+    });
+
+    // 4. Pending for Arresting:
+    // Any accused not arrested, not notice served, not bailed/surrendered, and not removed
+    const toArrest = list.filter((a) => {
+      const s = (a.status || '').toLowerCase();
+      if (s.includes('arrested') && !s.includes('order')) return false;
+      if (s.includes('notice')) return false;
+      if (s.includes('bail') || s.includes('surrender')) return false;
+      if (s.includes('removed')) return false;
+      return true;
     });
 
     setPendingArrestCount(toArrest.length);
@@ -373,20 +377,34 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
     syncAccusedCountsAndStatus(nextAccused);
   };
 
-  const handleUpdateAccusedStatus = (id: string, toggleStatus: 'Enquiry' | 'Charge True' | 'Arresting Order' | 'Arrested' | 'Name Removed' | 'Notice Served' | 'Bailed/Surrendered') => {
+  const handleUpdateAccusedStatus = (
+    id: string,
+    toggleStatus: 'Enquiry' | 'Charge True' | 'Arresting Order' | 'Arrested' | 'Name Removed' | 'Notice Served' | 'Bailed/Surrendered'
+  ) => {
     const nextAccused = accusedList.map((a) => {
       if (a.id === id) {
-        const currentStatuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
-        let updatedStatuses: string[];
-        if (currentStatuses.includes(toggleStatus)) {
-          updatedStatuses = currentStatuses.filter((s) => s !== toggleStatus);
+        let newStatus: string;
+        if (toggleStatus === 'Charge True') {
+          const currentStatuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
+          if (currentStatuses.includes('Charge True')) {
+            const rem = currentStatuses.filter((s) => s !== 'Charge True');
+            newStatus = rem.length > 0 ? rem.join(', ') : 'Enquiry';
+          } else {
+            const nonEnquiry = currentStatuses.filter((s) => s !== 'Enquiry');
+            newStatus = nonEnquiry.length > 0 ? `Charge True, ${nonEnquiry.join(', ')}` : 'Charge True';
+          }
         } else {
-          updatedStatuses = [...currentStatuses, toggleStatus];
+          // A primary action/custody status was clicked
+          const currentStatuses = a.status ? a.status.split(',').map((s) => s.trim()).filter(Boolean) : [];
+          // If already set as the primary status, toggle back to Enquiry
+          if (currentStatuses.includes(toggleStatus) && currentStatuses.filter((s) => s !== 'Charge True').length === 1) {
+            newStatus = currentStatuses.includes('Charge True') ? 'Charge True, Enquiry' : 'Enquiry';
+          } else {
+            // Replace previous custody status with the new selected status cleanly
+            newStatus = currentStatuses.includes('Charge True') ? `Charge True, ${toggleStatus}` : toggleStatus;
+          }
         }
-        if (updatedStatuses.length === 0) {
-          updatedStatuses = ['Enquiry'];
-        }
-        return { ...a, status: updatedStatuses.join(', ') };
+        return { ...a, status: newStatus };
       }
       return a;
     });
@@ -442,21 +460,23 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
   const [fslReportReceived, setFslReportReceived] = useState<ReviewStatus>(getInitialReviewStatus(caseItem?.fslReportReceived));
 
   // 2. Accused Tracking, Arrests, Notice 41A, Bail & Surrender
-  const [pendingForArrest, setPendingForArrest] = useState<boolean>(Boolean(caseItem?.pendingForArrest || (caseItem?.pendingArrestCount && caseItem.pendingArrestCount > 0)));
-  const [pendingArrestCount, setPendingArrestCount] = useState<number>(caseItem?.pendingArrestCount || (caseItem?.pendingForArrest ? 1 : 0));
-  const [pendingArrestNames, setPendingArrestNames] = useState<string>(caseItem?.pendingArrestNames || '');
+  const initialAccusedStats = getAccusedPipelineStats(caseItem);
 
-  const [anyPersonArrested, setAnyPersonArrested] = useState<boolean>(Boolean(caseItem?.anyPersonArrested || (caseItem?.arrestedCount && caseItem.arrestedCount > 0)));
-  const [arrestedCount, setArrestedCount] = useState<number>(caseItem?.arrestedCount || (caseItem?.anyPersonArrested ? 1 : 0));
-  const [arrestedNames, setArrestedNames] = useState<string>(caseItem?.arrestedNames || '');
+  const [pendingForArrest, setPendingForArrest] = useState<boolean>(initialAccusedStats.hasPending);
+  const [pendingArrestCount, setPendingArrestCount] = useState<number>(initialAccusedStats.pendingCount);
+  const [pendingArrestNames, setPendingArrestNames] = useState<string>(initialAccusedStats.pendingNames);
 
-  const [anyPersonServedNotice, setAnyPersonServedNotice] = useState<boolean>(Boolean(caseItem?.anyPersonServedNotice || (caseItem?.noticeServedCount && caseItem.noticeServedCount > 0)));
-  const [noticeServedCount, setNoticeServedCount] = useState<number>(caseItem?.noticeServedCount || (caseItem?.anyPersonServedNotice ? 1 : 0));
-  const [noticeServedNames, setNoticeServedNames] = useState<string>(caseItem?.noticeServedNames || '');
+  const [anyPersonArrested, setAnyPersonArrested] = useState<boolean>(initialAccusedStats.hasArrested);
+  const [arrestedCount, setArrestedCount] = useState<number>(initialAccusedStats.arrestedCount);
+  const [arrestedNames, setArrestedNames] = useState<string>(initialAccusedStats.arrestedNames);
 
-  const [anyPersonOnBailOrSurrendered, setAnyPersonOnBailOrSurrendered] = useState<boolean>(Boolean(caseItem?.anyPersonOnBailOrSurrendered || (caseItem?.bailSurrenderedCount && caseItem.bailSurrenderedCount > 0)));
-  const [bailSurrenderedCount, setBailSurrenderedCount] = useState<number>(caseItem?.bailSurrenderedCount || (caseItem?.anyPersonOnBailOrSurrendered ? 1 : 0));
-  const [bailSurrenderedNames, setBailSurrenderedNames] = useState<string>(caseItem?.bailSurrenderedNames || '');
+  const [anyPersonServedNotice, setAnyPersonServedNotice] = useState<boolean>(initialAccusedStats.hasNotice);
+  const [noticeServedCount, setNoticeServedCount] = useState<number>(initialAccusedStats.noticeCount);
+  const [noticeServedNames, setNoticeServedNames] = useState<string>(initialAccusedStats.noticeNames);
+
+  const [anyPersonOnBailOrSurrendered, setAnyPersonOnBailOrSurrendered] = useState<boolean>(initialAccusedStats.hasBail);
+  const [bailSurrenderedCount, setBailSurrenderedCount] = useState<number>(initialAccusedStats.bailCount);
+  const [bailSurrenderedNames, setBailSurrenderedNames] = useState<string>(initialAccusedStats.bailNames);
 
   const [otherPendingReasons, setOtherPendingReasons] = useState<string>(caseItem?.otherPendingReasons || '');
 
@@ -566,21 +586,22 @@ export const EditFIRModal: React.FC<EditFIRModalProps> = ({
       setFslItemSentOrPermissionTaken(getStatusVal(caseItem.fslItemSentOrPermissionTaken));
       setFslReportReceived(getStatusVal(caseItem.fslReportReceived));
 
-      setPendingForArrest(Boolean(caseItem.pendingForArrest || (caseItem.pendingArrestCount && caseItem.pendingArrestCount > 0)));
-      setPendingArrestCount(caseItem.pendingArrestCount || (caseItem.pendingForArrest ? 1 : 0));
-      setPendingArrestNames(caseItem.pendingArrestNames || '');
+      const accStats = getAccusedPipelineStats(caseItem);
+      setPendingForArrest(accStats.hasPending);
+      setPendingArrestCount(accStats.pendingCount);
+      setPendingArrestNames(accStats.pendingNames);
 
-      setAnyPersonArrested(Boolean(caseItem.anyPersonArrested || (caseItem.arrestedCount && caseItem.arrestedCount > 0)));
-      setArrestedCount(caseItem.arrestedCount || (caseItem.anyPersonArrested ? 1 : 0));
-      setArrestedNames(caseItem.arrestedNames || '');
+      setAnyPersonArrested(accStats.hasArrested);
+      setArrestedCount(accStats.arrestedCount);
+      setArrestedNames(accStats.arrestedNames);
 
-      setAnyPersonServedNotice(Boolean(caseItem.anyPersonServedNotice || (caseItem.noticeServedCount && caseItem.noticeServedCount > 0)));
-      setNoticeServedCount(caseItem.noticeServedCount || (caseItem.anyPersonServedNotice ? 1 : 0));
-      setNoticeServedNames(caseItem.noticeServedNames || '');
+      setAnyPersonServedNotice(accStats.hasNotice);
+      setNoticeServedCount(accStats.noticeCount);
+      setNoticeServedNames(accStats.noticeNames);
 
-      setAnyPersonOnBailOrSurrendered(Boolean(caseItem.anyPersonOnBailOrSurrendered || (caseItem.bailSurrenderedCount && caseItem.bailSurrenderedCount > 0)));
-      setBailSurrenderedCount(caseItem.bailSurrenderedCount || (caseItem.anyPersonOnBailOrSurrendered ? 1 : 0));
-      setBailSurrenderedNames(caseItem.bailSurrenderedNames || '');
+      setAnyPersonOnBailOrSurrendered(accStats.hasBail);
+      setBailSurrenderedCount(accStats.bailCount);
+      setBailSurrenderedNames(accStats.bailNames);
 
       setOtherPendingReasons(caseItem.otherPendingReasons || '');
 
