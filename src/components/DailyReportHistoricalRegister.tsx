@@ -899,8 +899,8 @@ export const DailyReportHistoricalRegister: React.FC<DailyReportHistoricalRegist
                   className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-slate-900 dark:text-white"
                 >
                   <option value="ALL">All Investigating Officers ({investigatingOfficers.length})</option>
-                  {investigatingOfficers.map((io) => (
-                    <option key={io.id} value={io.name}>
+                  {investigatingOfficers.map((io, idx) => (
+                    <option key={io.id || `${io.name}-${idx}`} value={io.name}>
                       {io.name} ({io.rank} - {io.ps})
                     </option>
                   ))}
