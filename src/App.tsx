@@ -45,6 +45,7 @@ import { DailyCrimeReportSection } from './components/DailyCrimeReport';
 import { SupervisionStatusSection } from './components/SupervisionStatusSection';
 import { CaseReviewSection } from './components/CaseReviewSection';
 import { UnifiedAnalyticsGraphs } from './components/UnifiedAnalyticsGraphs';
+import { CrimeHotspotMap } from './components/CrimeHotspotMap';
 import { AIChatbot } from './components/AIChatbot';
 import { LoginModal } from './components/LoginModal';
 import { UserManagementModal } from './components/UserManagementModal';
@@ -1746,7 +1747,19 @@ export default function App() {
           />
         )}
 
-        {/* Tab 9: Embedded AI Assistant */}
+        {/* Tab 9: Crime Hotspots GIS Mapping */}
+        {(activeTab === 'crime_hotspots' || activeTab === 'crime_hotspot') && (
+          <CrimeHotspotMap
+            cases={cases.filter(isRecordInUserBaseScope)}
+            availablePoliceStations={policeStations}
+            currentRole={currentRole}
+            currentUserAccount={currentUserAccount}
+            activePS={activePS}
+            onViewCase={(c) => setViewingCase(c)}
+          />
+        )}
+
+        {/* Tab 10: Embedded AI Assistant */}
         {activeTab === 'ai_assistant' && (
           <AIChatbot
             cases={cases.filter(isRecordInJurisdictionScope)}
