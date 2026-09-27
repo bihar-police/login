@@ -1751,11 +1751,14 @@ export default function App() {
         {(activeTab === 'crime_hotspots' || activeTab === 'crime_hotspot') && (
           <CrimeHotspotMap
             cases={cases.filter(isRecordInUserBaseScope)}
+            districts={districts}
+            subdivisions={subdivisions}
             availablePoliceStations={policeStations}
             currentRole={currentRole}
             currentUserAccount={currentUserAccount}
             activePS={activePS}
             onViewCase={(c) => setViewingCase(c)}
+            onEditCase={(c) => setEditingCase(c)}
           />
         )}
 
