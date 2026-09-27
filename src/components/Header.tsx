@@ -300,8 +300,8 @@ export const Header: React.FC<HeaderProps> = ({
                     className="bg-slate-950 text-white text-[10px] font-bold border border-rose-700/60 rounded px-1 py-0.2 focus:outline-none cursor-pointer"
                   >
                     <option value="ALL">All Districts</option>
-                    {districts.map((d) => (
-                      <option key={d.id} value={d.name}>
+                    {districts.map((d, idx) => (
+                      <option key={d.id || `${d.name}-${idx}`} value={d.name}>
                         {d.name} District
                       </option>
                     ))}
@@ -319,8 +319,8 @@ export const Header: React.FC<HeaderProps> = ({
                     className="bg-slate-950 text-white text-[10px] font-bold border border-sky-700/60 rounded px-1 py-0.2 focus:outline-none cursor-pointer"
                   >
                     <option value="ALL">All Subdivisions</option>
-                    {districtSubdivisions.map((s) => (
-                      <option key={s.id} value={s.name}>
+                    {districtSubdivisions.map((s, idx) => (
+                      <option key={s.id || `${s.name}-${idx}`} value={s.name}>
                         {s.name} Subdiv
                       </option>
                     ))}
@@ -341,8 +341,8 @@ export const Header: React.FC<HeaderProps> = ({
                 className="bg-slate-950 text-white text-[10px] font-bold border border-sky-700/60 rounded px-1 py-0.2 focus:outline-none cursor-pointer"
               >
                 <option value="ALL">All Subdivisions</option>
-                {districtSubdivisions.map((s) => (
-                  <option key={s.id} value={s.name}>
+                {districtSubdivisions.map((s, idx) => (
+                  <option key={s.id || `${s.name}-${idx}`} value={s.name}>
                     {s.name} Subdivision
                   </option>
                 ))}
