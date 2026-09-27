@@ -92,6 +92,7 @@ async function attemptUpsertWithColumnPruning(
     }
 
     // If PostgreSQL reports type mismatch (e.g., column is TEXT in database, but JS object/array was sent), serialize objects to JSON strings
+    // Or if column is DATE and empty string was sent, convert empty string to null
     if (
       error.message?.includes('type') ||
       error.message?.includes('invalid input syntax') ||
@@ -100,17 +101,20 @@ async function attemptUpsertWithColumnPruning(
       error.code === '42804'
     ) {
       let modified = false;
-      const stringifiedPayload: Record<string, any> = { ...currentPayload };
-      for (const [key, val] of Object.entries(stringifiedPayload)) {
+      const sanitizedPayload: Record<string, any> = { ...currentPayload };
+      for (const [key, val] of Object.entries(sanitizedPayload)) {
         if (val !== null && typeof val === 'object' && !(val instanceof Date)) {
-          stringifiedPayload[key] = JSON.stringify(val);
+          sanitizedPayload[key] = JSON.stringify(val);
+          modified = true;
+        } else if (val === '' && (key.includes('date') || key.includes('time') || key.includes('created') || key.includes('updated'))) {
+          sanitizedPayload[key] = null;
           modified = true;
         }
       }
       if (modified) {
         const { error: retryErr } = await client
           .from(tableName)
-          .upsert([stringifiedPayload], { onConflict: conflictKey });
+          .upsert([sanitizedPayload], { onConflict: conflictKey });
         if (!retryErr) {
           return { success: true };
         }
@@ -412,17 +416,28 @@ export async function fetchFIRCasesFromSupabase(): Promise<FIRCase[] | null> {
       subdivision: d.subdivision || 'Tarapur',
       firDate: d.fir_date || d.firDate || '',
       sections: d.sections || '',
+      crimeHead: d.crime_head || d.crimeHead,
+      crimeHeads: Array.isArray(d.crime_heads) ? d.crime_heads : (Array.isArray(d.crimeHeads) ? d.crimeHeads : []),
       punishmentTerm: d.punishment_term || d.punishmentTerm,
       complainantName: d.complainant_name || d.complainantName || '',
       complainantPhone: d.complainant_phone || d.complainantPhone,
       placeOfOccurrence: d.place_of_occurrence || d.placeOfOccurrence || '',
+      poAddress: d.po_address || d.poAddress,
+      grNumber: d.gr_number || d.grNumber,
+      latitude: d.latitude ? Number(d.latitude) : undefined,
+      longitude: d.longitude ? Number(d.longitude) : undefined,
       ioName: d.io_name || d.ioName || '',
       designation: d.designation || 'PENDING_DESIGNATION',
       designationDate: d.designation_date || d.designationDate,
+      accusedList: Array.isArray(d.accused_list) ? d.accused_list : (Array.isArray(d.accusedList) ? d.accusedList : []),
+      accusedCount: Number(d.accused_count ?? d.accusedCount ?? 0),
       deadlineDays: Number(d.deadline_days ?? d.deadlineDays) || 60,
       status: d.status || 'Under Investigation',
       chargesheetNumber: d.chargesheet_number || d.chargesheetNumber,
       chargesheetDate: d.chargesheet_date || d.chargesheetDate,
+      disposedDate: d.disposed_date || d.disposedDate,
+      disposalType: d.disposal_type || d.disposalType,
+      disposalRemarks: d.disposal_remarks || d.disposalRemarks,
       chargesheetUploadedCCTNS: Boolean(d.chargesheet_uploaded_cctns ?? d.chargesheetUploadedCCTNS),
       chargesheetCCTNSDate: d.chargesheet_cctns_date || d.chargesheetCCTNSDate,
       caseDiaryUploadedCCTNS: Boolean(d.case_diary_uploaded_cctns ?? d.caseDiaryUploadedCCTNS),
@@ -436,6 +451,67 @@ export async function fetchFIRCasesFromSupabase(): Promise<FIRCase[] | null> {
       sdpoSupervisionNote: d.sdpo_supervision_note || d.sdpoSupervisionNote,
       ciSupervisionNote: d.ci_supervision_note || d.ciSupervisionNote,
       psProgressRemarks: d.ps_progress_remarks || d.psProgressRemarks,
+
+      // Case Review & Forensic Parameters
+      isInjuryPresent: Boolean(d.is_injury_present ?? d.isInjuryPresent),
+      injuryReportReceived: d.injury_report_received ?? d.injuryReportReceived ?? 'NA',
+      pmReportReceived: d.pm_report_received ?? d.pmReportReceived ?? 'NA',
+      visceraPreserved: d.viscera_preserved ?? d.visceraPreserved ?? 'NA',
+      fslVisitedPO: d.fsl_visited_po ?? d.fslVisitedPO ?? 'NA',
+      fslItemPreservedName: d.fsl_item_preserved_name || d.fslItemPreservedName,
+      fslItemSentOrPermissionTaken: d.fsl_item_sent_or_permission_taken ?? d.fslItemSentOrPermissionTaken ?? 'NA',
+      fslReportReceived: d.fsl_report_received ?? d.fslReportReceived ?? 'NA',
+
+      // Accused & Arrests Pipeline
+      pendingForArrest: Boolean(d.pending_for_arrest ?? d.pendingForArrest),
+      pendingArrestCount: Number(d.pending_arrest_count ?? d.pendingArrestCount ?? 0),
+      pendingArrestNames: d.pending_arrest_names || d.pendingArrestNames,
+      anyPersonArrested: Boolean(d.any_person_arrested ?? d.anyPersonArrested),
+      arrestedCount: Number(d.arrested_count ?? d.arrestedCount ?? 0),
+      arrestedNames: d.arrested_names || d.arrestedNames,
+      anyPersonServedNotice: Boolean(d.any_person_served_notice ?? d.anyPersonServedNotice),
+      noticeServedCount: Number(d.notice_served_count ?? d.noticeServedCount ?? 0),
+      noticeServedNames: d.notice_served_names || d.noticeServedNames,
+      anyPersonOnBailOrSurrendered: Boolean(d.any_person_on_bail_or_surrendered ?? d.anyPersonOnBailOrSurrendered),
+      bailSurrenderedCount: Number(d.bail_surrendered_count ?? d.bailSurrenderedCount ?? 0),
+      bailSurrenderedNames: d.bail_surrendered_names || d.bailSurrenderedNames,
+      otherPendingReasons: d.other_pending_reasons || d.otherPendingReasons,
+
+      // Recovery Case
+      isVictimRecoveryCase: Boolean(d.is_victim_recovery_case ?? d.isVictimRecoveryCase),
+      victimCount: Number(d.victim_count ?? d.victimCount ?? 0),
+      victimAgeType: d.victim_age_type || d.victimAgeType || 'minor',
+      victimRecovered: Boolean(d.victim_recovered ?? d.victimRecovered),
+      victimRecoveryDate: d.victim_recovery_date || d.victimRecoveryDate,
+      victimRecoveryDetails: d.victim_recovery_details || d.victimRecoveryDetails,
+
+      // Special Acts (Arms, Liquor, NDPS)
+      isArmsCase: Boolean(d.is_arms_case ?? d.isArmsCase),
+      armsSentForVerification: d.arms_sent_for_verification ?? d.armsSentForVerification ?? 'NA',
+      armsReportReceived: d.arms_report_received ?? d.armsReportReceived ?? 'NA',
+      isLiquorCase: Boolean(d.is_liquor_case ?? d.isLiquorCase),
+      liquorSentToLab: d.liquor_sent_to_lab ?? d.liquorSentToLab ?? 'NA',
+      liquorLabReportReceived: d.liquor_lab_report_received ?? d.liquorLabReportReceived ?? 'NA',
+      confiscationOfLiquor: d.confiscation_of_liquor ?? d.confiscationOfLiquor ?? 'NA',
+      liquorVehicleSeized: Boolean(d.liquor_vehicle_seized ?? d.liquorVehicleSeized),
+      vehicleVerifiedRTO: d.vehicle_verified_rto ?? d.vehicleVerifiedRTO ?? 'NA',
+      vehicleRajsatStatus: d.vehicle_rajsat_status ?? d.vehicleRajsatStatus ?? 'NA',
+      isNdpsCase: Boolean(d.is_ndps_case ?? d.isNdpsCase),
+      ndpsSampleSentToLab: d.ndps_sample_sent_to_lab ?? d.ndpsSampleSentToLab ?? 'NA',
+      ndpsLabReportReceived: d.ndps_lab_report_received ?? d.ndpsLabReportReceived ?? 'NA',
+      ndpsExhibitSentToSafeHouse: d.ndps_exhibit_sent_to_safe_house ?? d.ndpsExhibitSentToSafeHouse ?? 'NA',
+
+      // Digital & Target Timeline
+      totalCdUploaded: Number(d.total_cd_uploaded ?? d.totalCdUploaded ?? 0),
+      poPreserved: d.po_preserved ?? d.poPreserved ?? 'NA',
+      poVideographyDone: d.po_videography_done ?? d.poVideographyDone ?? 'NA',
+      totalSidCreated: Number(d.total_sid_created ?? d.totalSidCreated ?? 0),
+      sidLinkedWithFir: d.sid_linked_with_fir ?? d.sidLinkedWithFir ?? 'NA',
+      targetDisposalDate: d.target_disposal_date || d.targetDisposalDate,
+      targetRemarks: d.target_remarks || d.targetRemarks,
+      lastCaseReviewDate: d.last_case_review_date || d.lastCaseReviewDate,
+      noOfReviews: Number(d.no_of_reviews ?? d.noOfReviews ?? 0),
+
       createdAt: d.created_at || d.createdAt || new Date().toISOString().split('T')[0],
       updatedAt: d.updated_at || d.updatedAt || new Date().toISOString().split('T')[0],
     })) as FIRCase[];
@@ -454,10 +530,16 @@ export async function saveFIRCaseToSupabase(firCase: FIRCase): Promise<boolean> 
     subdivision: firCase.subdivision || 'Tarapur',
     fir_date: firCase.firDate,
     sections: firCase.sections,
+    crime_head: firCase.crimeHead || null,
+    crime_heads: firCase.crimeHeads || [],
     punishment_term: firCase.punishmentTerm || null,
     complainant_name: firCase.complainantName,
     complainant_phone: firCase.complainantPhone || null,
     place_of_occurrence: firCase.placeOfOccurrence,
+    po_address: firCase.poAddress || null,
+    gr_number: firCase.grNumber || null,
+    latitude: firCase.latitude ?? null,
+    longitude: firCase.longitude ?? null,
     io_name: firCase.ioName,
     designation: firCase.designation,
     designation_date: firCase.designationDate || null,
@@ -465,6 +547,9 @@ export async function saveFIRCaseToSupabase(firCase: FIRCase): Promise<boolean> 
     status: firCase.status,
     chargesheet_number: firCase.chargesheetNumber || null,
     chargesheet_date: firCase.chargesheetDate || null,
+    disposed_date: firCase.disposedDate || null,
+    disposal_type: firCase.disposalType || null,
+    disposal_remarks: firCase.disposalRemarks || null,
     chargesheet_uploaded_cctns: firCase.chargesheetUploadedCCTNS,
     chargesheet_cctns_date: firCase.chargesheetCCTNSDate || null,
     case_diary_uploaded_cctns: firCase.caseDiaryUploadedCCTNS,
@@ -478,6 +563,69 @@ export async function saveFIRCaseToSupabase(firCase: FIRCase): Promise<boolean> 
     sdpo_supervision_note: firCase.sdpoSupervisionNote || null,
     ci_supervision_note: firCase.ciSupervisionNote || null,
     ps_progress_remarks: firCase.psProgressRemarks || null,
+
+    // Accused details & list
+    accused_list: firCase.accusedList || [],
+    accused_count: firCase.accusedCount ?? (firCase.accusedList?.length || 0),
+    pending_for_arrest: Boolean(firCase.pendingForArrest),
+    pending_arrest_count: firCase.pendingArrestCount ?? 0,
+    pending_arrest_names: firCase.pendingArrestNames || null,
+    any_person_arrested: Boolean(firCase.anyPersonArrested),
+    arrested_count: firCase.arrestedCount ?? 0,
+    arrested_names: firCase.arrestedNames || null,
+    any_person_served_notice: Boolean(firCase.anyPersonServedNotice),
+    notice_served_count: firCase.noticeServedCount ?? 0,
+    notice_served_names: firCase.noticeServedNames || null,
+    any_person_on_bail_or_surrendered: Boolean(firCase.anyPersonOnBailOrSurrendered),
+    bail_surrendered_count: firCase.bailSurrenderedCount ?? 0,
+    bail_surrendered_names: firCase.bailSurrenderedNames || null,
+    other_pending_reasons: firCase.otherPendingReasons || null,
+
+    // Case Review & Forensic Checklist
+    is_injury_present: Boolean(firCase.isInjuryPresent),
+    injury_report_received: firCase.injuryReportReceived ?? 'NA',
+    pm_report_received: firCase.pmReportReceived ?? 'NA',
+    viscera_preserved: firCase.visceraPreserved ?? 'NA',
+    fsl_visited_po: firCase.fslVisitedPO ?? 'NA',
+    fsl_item_preserved_name: firCase.fslItemPreservedName || null,
+    fsl_item_sent_or_permission_taken: firCase.fslItemSentOrPermissionTaken ?? 'NA',
+    fsl_report_received: firCase.fslReportReceived ?? 'NA',
+
+    // Recovery Case
+    is_victim_recovery_case: Boolean(firCase.isVictimRecoveryCase),
+    victim_count: firCase.victimCount ?? 0,
+    victim_age_type: firCase.victimAgeType || 'minor',
+    victim_recovered: Boolean(firCase.victimRecovered),
+    victim_recovery_date: firCase.victimRecoveryDate || null,
+    victim_recovery_details: firCase.victimRecoveryDetails || null,
+
+    // Special Acts (Arms, Liquor, NDPS)
+    is_arms_case: Boolean(firCase.isArmsCase),
+    arms_sent_for_verification: firCase.armsSentForVerification ?? 'NA',
+    arms_report_received: firCase.armsReportReceived ?? 'NA',
+    is_liquor_case: Boolean(firCase.isLiquorCase),
+    liquor_sent_to_lab: firCase.liquorSentToLab ?? 'NA',
+    liquor_lab_report_received: firCase.liquorLabReportReceived ?? 'NA',
+    confiscation_of_liquor: firCase.confiscationOfLiquor ?? 'NA',
+    liquor_vehicle_seized: Boolean(firCase.liquorVehicleSeized),
+    vehicle_verified_rto: firCase.vehicleVerifiedRTO ?? 'NA',
+    vehicle_rajsat_status: firCase.vehicleRajsatStatus ?? 'NA',
+    is_ndps_case: Boolean(firCase.isNdpsCase),
+    ndps_sample_sent_to_lab: firCase.ndpsSampleSentToLab ?? 'NA',
+    ndps_lab_report_received: firCase.ndpsLabReportReceived ?? 'NA',
+    ndps_exhibit_sent_to_safe_house: firCase.ndpsExhibitSentToSafeHouse ?? 'NA',
+
+    // Digital & Target Timeline
+    total_cd_uploaded: firCase.totalCdUploaded ?? 0,
+    po_preserved: firCase.poPreserved ?? 'NA',
+    po_videography_done: firCase.poVideographyDone ?? 'NA',
+    total_sid_created: firCase.totalSidCreated ?? 0,
+    sid_linked_with_fir: firCase.sidLinkedWithFir ?? 'NA',
+    target_disposal_date: firCase.targetDisposalDate || null,
+    target_remarks: firCase.targetRemarks || null,
+    last_case_review_date: firCase.lastCaseReviewDate || null,
+    no_of_reviews: firCase.noOfReviews ?? (firCase.caseReviewDates?.length || 0),
+
     created_at: firCase.createdAt,
     updated_at: firCase.updatedAt || new Date().toISOString().split('T')[0],
   };
@@ -490,10 +638,16 @@ export async function saveFIRCaseToSupabase(firCase: FIRCase): Promise<boolean> 
     subdivision: firCase.subdivision || 'Tarapur',
     firDate: firCase.firDate,
     sections: firCase.sections,
+    crimeHead: firCase.crimeHead || null,
+    crimeHeads: firCase.crimeHeads || [],
     punishmentTerm: firCase.punishmentTerm || null,
     complainantName: firCase.complainantName,
     complainantPhone: firCase.complainantPhone || null,
     placeOfOccurrence: firCase.placeOfOccurrence,
+    poAddress: firCase.poAddress || null,
+    grNumber: firCase.grNumber || null,
+    latitude: firCase.latitude ?? null,
+    longitude: firCase.longitude ?? null,
     ioName: firCase.ioName,
     designation: firCase.designation,
     designationDate: firCase.designationDate || null,
@@ -501,6 +655,9 @@ export async function saveFIRCaseToSupabase(firCase: FIRCase): Promise<boolean> 
     status: firCase.status,
     chargesheetNumber: firCase.chargesheetNumber || null,
     chargesheetDate: firCase.chargesheetDate || null,
+    disposedDate: firCase.disposedDate || null,
+    disposalType: firCase.disposalType || null,
+    disposalRemarks: firCase.disposalRemarks || null,
     chargesheetUploadedCCTNS: firCase.chargesheetUploadedCCTNS,
     chargesheetCCTNSDate: firCase.chargesheetCCTNSDate || null,
     caseDiaryUploadedCCTNS: firCase.caseDiaryUploadedCCTNS,
@@ -514,6 +671,69 @@ export async function saveFIRCaseToSupabase(firCase: FIRCase): Promise<boolean> 
     sdpoSupervisionNote: firCase.sdpoSupervisionNote || null,
     ciSupervisionNote: firCase.ciSupervisionNote || null,
     psProgressRemarks: firCase.psProgressRemarks || null,
+
+    // Accused details & list
+    accusedList: firCase.accusedList || [],
+    accusedCount: firCase.accusedCount ?? (firCase.accusedList?.length || 0),
+    pendingForArrest: Boolean(firCase.pendingForArrest),
+    pendingArrestCount: firCase.pendingArrestCount ?? 0,
+    pendingArrestNames: firCase.pendingArrestNames || null,
+    anyPersonArrested: Boolean(firCase.anyPersonArrested),
+    arrestedCount: firCase.arrestedCount ?? 0,
+    arrestedNames: firCase.arrestedNames || null,
+    anyPersonServedNotice: Boolean(firCase.anyPersonServedNotice),
+    noticeServedCount: firCase.noticeServedCount ?? 0,
+    noticeServedNames: firCase.noticeServedNames || null,
+    anyPersonOnBailOrSurrendered: Boolean(firCase.anyPersonOnBailOrSurrendered),
+    bailSurrenderedCount: firCase.bailSurrenderedCount ?? 0,
+    bailSurrenderedNames: firCase.bailSurrenderedNames || null,
+    otherPendingReasons: firCase.otherPendingReasons || null,
+
+    // Case Review & Forensic Checklist
+    isInjuryPresent: Boolean(firCase.isInjuryPresent),
+    injuryReportReceived: firCase.injuryReportReceived ?? 'NA',
+    pmReportReceived: firCase.pmReportReceived ?? 'NA',
+    visceraPreserved: firCase.visceraPreserved ?? 'NA',
+    fslVisitedPO: firCase.fslVisitedPO ?? 'NA',
+    fslItemPreservedName: firCase.fslItemPreservedName || null,
+    fslItemSentOrPermissionTaken: firCase.fslItemSentOrPermissionTaken ?? 'NA',
+    fslReportReceived: firCase.fslReportReceived ?? 'NA',
+
+    // Recovery Case
+    isVictimRecoveryCase: Boolean(firCase.isVictimRecoveryCase),
+    victimCount: firCase.victimCount ?? 0,
+    victimAgeType: firCase.victimAgeType || 'minor',
+    victimRecovered: Boolean(firCase.victimRecovered),
+    victimRecoveryDate: firCase.victimRecoveryDate || null,
+    victimRecoveryDetails: firCase.victimRecoveryDetails || null,
+
+    // Special Acts (Arms, Liquor, NDPS)
+    isArmsCase: Boolean(firCase.isArmsCase),
+    armsSentForVerification: firCase.armsSentForVerification ?? 'NA',
+    armsReportReceived: firCase.armsReportReceived ?? 'NA',
+    isLiquorCase: Boolean(firCase.isLiquorCase),
+    liquorSentToLab: firCase.liquorSentToLab ?? 'NA',
+    liquorLabReportReceived: firCase.liquorLabReportReceived ?? 'NA',
+    confiscationOfLiquor: firCase.confiscationOfLiquor ?? 'NA',
+    liquorVehicleSeized: Boolean(firCase.liquorVehicleSeized),
+    vehicleVerifiedRTO: firCase.vehicleVerifiedRTO ?? 'NA',
+    vehicleRajsatStatus: firCase.vehicleRajsatStatus ?? 'NA',
+    isNdpsCase: Boolean(firCase.isNdpsCase),
+    ndpsSampleSentToLab: firCase.ndpsSampleSentToLab ?? 'NA',
+    ndpsLabReportReceived: firCase.ndpsLabReportReceived ?? 'NA',
+    ndpsExhibitSentToSafeHouse: firCase.ndpsExhibitSentToSafeHouse ?? 'NA',
+
+    // Digital & Target Timeline
+    totalCdUploaded: firCase.totalCdUploaded ?? 0,
+    poPreserved: firCase.poPreserved ?? 'NA',
+    poVideographyDone: firCase.poVideographyDone ?? 'NA',
+    totalSidCreated: firCase.totalSidCreated ?? 0,
+    sidLinkedWithFir: firCase.sidLinkedWithFir ?? 'NA',
+    targetDisposalDate: firCase.targetDisposalDate || null,
+    targetRemarks: firCase.targetRemarks || null,
+    lastCaseReviewDate: firCase.lastCaseReviewDate || null,
+    noOfReviews: firCase.noOfReviews ?? (firCase.caseReviewDates?.length || 0),
+
     createdAt: firCase.createdAt,
     updatedAt: firCase.updatedAt || new Date().toISOString().split('T')[0],
   };
