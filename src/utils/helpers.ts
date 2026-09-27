@@ -432,3 +432,154 @@ export function matchesReviewFilter(caseVal: any, filterVal?: string): boolean {
   return true;
 }
 
+export interface AccusedPipelineStats {
+  totalAccused: number;
+  hasPending: boolean;
+  pendingCount: number;
+  pendingNames: string;
+  hasArrested: boolean;
+  arrestedCount: number;
+  arrestedNames: string;
+  hasNotice: boolean;
+  noticeCount: number;
+  noticeNames: string;
+  hasBail: boolean;
+  bailCount: number;
+  bailNames: string;
+  removedCount: number;
+  removedNames: string;
+  enquiryCount: number;
+  enquiryNames: string;
+  chargeTrueCount: number;
+  chargeTrueNames: string;
+  list: { id: string; name: string; status: string }[];
+}
+
+export function getAccusedPipelineStats(c: Partial<FIRCase> | null | undefined): AccusedPipelineStats {
+  if (!c) {
+    return {
+      totalAccused: 0,
+      hasPending: false,
+      pendingCount: 0,
+      pendingNames: '',
+      hasArrested: false,
+      arrestedCount: 0,
+      arrestedNames: '',
+      hasNotice: false,
+      noticeCount: 0,
+      noticeNames: '',
+      hasBail: false,
+      bailCount: 0,
+      bailNames: '',
+      removedCount: 0,
+      removedNames: '',
+      enquiryCount: 0,
+      enquiryNames: '',
+      chargeTrueCount: 0,
+      chargeTrueNames: '',
+      list: [],
+    };
+  }
+
+  const list = c.accusedList || [];
+
+  // 1. Arrested list
+  const arrestedFromList = list.filter((a) => {
+    const s = (a.status || '').toLowerCase();
+    return s.includes('arrested') && !s.includes('not arrested') && !s.includes('order');
+  });
+  const arrestedCount = Math.max(
+    Number(c.arrestedCount || 0),
+    c.anyPersonArrested ? 1 : 0,
+    arrestedFromList.length
+  );
+  const arrestedNames = (c.arrestedNames && c.arrestedNames.trim()) || arrestedFromList.map((a) => a.name).join(', ');
+  const hasArrested = arrestedCount > 0 || Boolean(c.anyPersonArrested) || arrestedFromList.length > 0;
+
+  // 2. 41A Notice Served list
+  const noticeFromList = list.filter((a) => (a.status || '').toLowerCase().includes('notice'));
+  const noticeCount = Math.max(
+    Number(c.noticeServedCount || 0),
+    c.anyPersonServedNotice ? 1 : 0,
+    noticeFromList.length
+  );
+  const noticeNames = (c.noticeServedNames && c.noticeServedNames.trim()) || noticeFromList.map((a) => a.name).join(', ');
+  const hasNotice = noticeCount > 0 || Boolean(c.anyPersonServedNotice) || noticeFromList.length > 0;
+
+  // 3. Bail / Surrendered list
+  const bailFromList = list.filter((a) => {
+    const s = (a.status || '').toLowerCase();
+    return s.includes('bail') || s.includes('surrender');
+  });
+  const bailCount = Math.max(
+    Number(c.bailSurrenderedCount || 0),
+    c.anyPersonOnBailOrSurrendered ? 1 : 0,
+    bailFromList.length
+  );
+  const bailNames = (c.bailSurrenderedNames && c.bailSurrenderedNames.trim()) || bailFromList.map((a) => a.name).join(', ');
+  const hasBail = bailCount > 0 || Boolean(c.anyPersonOnBailOrSurrendered) || bailFromList.length > 0;
+
+  // 4. Name Removed list
+  const removedFromList = list.filter((a) => (a.status || '').toLowerCase().includes('removed'));
+  const removedCount = removedFromList.length;
+  const removedNames = removedFromList.map((a) => a.name).join(', ');
+
+  // 5. Pending for Arresting:
+  // Accused who are explicitly in 'Arresting Order', or who are NOT arrested, NOT notice served, NOT bailed/surrendered, and NOT name removed
+  const pendingFromList = list.filter((a) => {
+    const s = (a.status || '').toLowerCase();
+    if (s.includes('arrested') && !s.includes('order')) return false;
+    if (s.includes('notice')) return false;
+    if (s.includes('bail') || s.includes('surrender')) return false;
+    if (s.includes('removed')) return false;
+    return true;
+  });
+
+  const pendingCount = Math.max(
+    Number(c.pendingArrestCount || 0),
+    c.pendingForArrest ? 1 : 0,
+    pendingFromList.length
+  );
+  const pendingNames = (c.pendingArrestNames && c.pendingArrestNames.trim()) || pendingFromList.map((a) => a.name).join(', ');
+  const hasPending = pendingCount > 0 || Boolean(c.pendingForArrest) || pendingFromList.length > 0;
+
+  // 6. Enquiry
+  const enquiryFromList = list.filter((a) => {
+    const s = (a.status || '').toLowerCase();
+    return s.includes('enquiry') || s === '';
+  });
+
+  // 7. Charge True
+  const chargeTrueFromList = list.filter((a) => (a.status || '').toLowerCase().includes('charge true'));
+
+  // Total Accused
+  const totalAccused = Math.max(
+    Number(c.accusedCount || 0),
+    list.length,
+    arrestedCount + pendingCount + noticeCount + bailCount
+  );
+
+  return {
+    totalAccused,
+    hasPending,
+    pendingCount,
+    pendingNames,
+    hasArrested,
+    arrestedCount,
+    arrestedNames,
+    hasNotice,
+    noticeCount,
+    noticeNames,
+    hasBail,
+    bailCount,
+    bailNames,
+    removedCount,
+    removedNames,
+    enquiryCount: enquiryFromList.length,
+    enquiryNames: enquiryFromList.map((a) => a.name).join(', '),
+    chargeTrueCount: chargeTrueFromList.length,
+    chargeTrueNames: chargeTrueFromList.map((a) => a.name).join(', '),
+    list,
+  };
+}
+
