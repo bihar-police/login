@@ -24,6 +24,8 @@ import {
   classifyAllCrimeHeads,
   getDynamicCrimeHeadsConfig,
 } from '../utils/crimeClassifier';
+import { fetchGRForAddress } from '../utils/geoCoder';
+import { POAddressMapPicker } from './POAddressMapPicker';
 import {
   X,
   Shield,
@@ -38,6 +40,8 @@ import {
   Building,
   ShieldAlert,
   Sparkles,
+  Compass,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface NewFIREntryModalProps {
@@ -233,6 +237,10 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
   const [complainantName, setComplainantName] = useState('');
   const [complainantPhone, setComplainantPhone] = useState('');
   const [placeOfOccurrence, setPlaceOfOccurrence] = useState('');
+  const [grNumber, setGrNumber] = useState('');
+  const [latitude, setLatitude] = useState<number | undefined>(undefined);
+  const [longitude, setLongitude] = useState<number | undefined>(undefined);
+  const [isFetchingGR, setIsFetchingGR] = useState(false);
   const [accusedNames, setAccusedNames] = useState<string[]>([]);
   const [accusedCount, setAccusedCount] = useState<number>(0);
   const [accusedInput, setAccusedInput] = useState('');
@@ -255,6 +263,9 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
       setComplainantName('');
       setComplainantPhone('');
       setPlaceOfOccurrence('');
+      setGrNumber('');
+      setLatitude(undefined);
+      setLongitude(undefined);
       setAccusedNames([]);
       setAccusedCount(0);
       setAccusedInput('');
@@ -263,6 +274,25 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
       setPsProgressRemarks('');
     }
   }, [isOpen]);
+
+  const handleFetchGR = async () => {
+    setIsFetchingGR(true);
+    try {
+      const res = await fetchGRForAddress(
+        placeOfOccurrence,
+        ps,
+        selectedSubdivision,
+        selectedDistrict
+      );
+      setGrNumber(res.grNumber);
+      setLatitude(res.latitude);
+      setLongitude(res.longitude);
+    } catch {
+      // Fallback
+    } finally {
+      setIsFetchingGR(false);
+    }
+  };
 
   const handleAddAccused = () => {
     if (!accusedInput.trim()) return;
@@ -354,6 +384,10 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
       complainantName: complainantName.trim(),
       complainantPhone: complainantPhone.trim(),
       placeOfOccurrence: placeOfOccurrence.trim(),
+      poAddress: placeOfOccurrence.trim(),
+      grNumber: grNumber.trim() || undefined,
+      latitude,
+      longitude,
       ioName,
       designation: 'PENDING_DESIGNATION', // Super User will classify later
       deadlineDays,
@@ -732,18 +766,23 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
 
           </div>
 
-          {/* Place of Occurrence */}
-          <div>
-            <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Place of Occurrence (PO) <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
+          {/* Place of Occurrence (PO) with Live Search on Map & Pick GR */}
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
+            <POAddressMapPicker
               value={placeOfOccurrence}
-              onChange={(e) => setPlaceOfOccurrence(e.target.value)}
-              placeholder="Village, Landmark, Ward No., Panchayat"
+              onChange={setPlaceOfOccurrence}
+              grNumber={grNumber}
+              onGrChange={setGrNumber}
+              latitude={latitude}
+              longitude={longitude}
+              onCoordinatesChange={(lat, lng) => {
+                setLatitude(lat);
+                setLongitude(lng);
+              }}
+              psName={ps}
+              subdivisionName={selectedSubdivision}
+              districtName={selectedDistrict}
               required
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
