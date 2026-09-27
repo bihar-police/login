@@ -3980,8 +3980,8 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                     }}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white"
                   >
-                    {getEffectiveDistricts(districts).map((d) => (
-                      <option key={d.id || d.name} value={d.name}>
+                    {getEffectiveDistricts(districts).map((d, idx) => (
+                      <option key={d.id || `${d.name}-${idx}`} value={d.name}>
                         {d.name} District
                       </option>
                     ))}
@@ -3999,8 +3999,8 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white"
                   >
                     <option value="ALL">All Subdivisions</option>
-                    {availableAddSubdivisions.map((s) => (
-                      <option key={s.id || s.name} value={s.name}>
+                    {availableAddSubdivisions.map((s, idx) => (
+                      <option key={s.id || `${s.name}-${idx}`} value={s.name}>
                         {s.name} Subdiv
                       </option>
                     ))}
@@ -4018,8 +4018,8 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white disabled:opacity-75"
                 >
                   {!activePS && <option value="Subdivision HQ">Subdivision HQ</option>}
-                  {availableAddStations.map((ps) => (
-                    <option key={ps.id || ps.name} value={ps.name}>
+                  {availableAddStations.map((ps, idx) => (
+                    <option key={ps.id || `${ps.name}-${idx}`} value={ps.name}>
                       {ps.name} PS
                     </option>
                   ))}
@@ -4310,8 +4310,8 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                     }}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white"
                   >
-                    {ios.map((io) => (
-                      <option key={io.id} value={io.id}>
+                    {ios.map((io, idx) => (
+                      <option key={io.id || `${io.name}-${idx}`} value={io.id}>
                         {io.name} ({io.rank} - {io.ps} PS)
                       </option>
                     ))}
@@ -4330,8 +4330,8 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-bold text-slate-900 dark:text-white"
                   >
                     <option value="ALL">All Stations (Bulk)</option>
-                    {stationOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
+                    {stationOptions.map((opt, idx) => (
+                      <option key={`${opt.value}-${idx}`} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
@@ -4629,8 +4629,8 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                      {viewingReport.rankStrengths.map((rs) => (
-                        <tr key={rs.rank}>
+                      {viewingReport.rankStrengths.map((rs, idx) => (
+                        <tr key={`${rs.rank}-${idx}`}>
                           <td className="py-1 font-bold">{rs.rank}</td>
                           <td className="py-1 text-center">{rs.totalStrength}</td>
                           <td className="py-1 text-center font-extrabold text-emerald-600">{rs.present}</td>
