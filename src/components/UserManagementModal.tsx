@@ -641,8 +641,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                       }}
                       className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-semibold text-slate-900 dark:text-white"
                     >
-                      {districts.map((d) => (
-                        <option key={d.id} value={d.name}>
+                      {districts.map((d, idx) => (
+                        <option key={d.id || `${d.name}-${idx}`} value={d.name}>
                           {d.name} District
                         </option>
                       ))}
@@ -734,8 +734,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                       >
                         {subdivisions
                           .filter((s) => !s.districtName || s.districtName.toLowerCase() === (isAdministrator ? newDistrict : userDistrict).toLowerCase())
-                          .map((s) => (
-                            <option key={s.id} value={s.name}>
+                          .map((s, idx) => (
+                            <option key={s.id || `${s.name}-${idx}`} value={s.name}>
                               {s.name} Subdivision
                             </option>
                           ))}
@@ -761,8 +761,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                             !ps.subdivisionName ||
                             ps.subdivisionName.toLowerCase() === (isSubdivisionOfficer ? userSubdivision : newSubdivision).toLowerCase()
                         )
-                        .map((ps) => (
-                          <option key={ps.id} value={ps.name}>
+                        .map((ps, idx) => (
+                          <option key={ps.id || `${ps.name}-${idx}`} value={ps.name}>
                             {ps.name} PS
                           </option>
                         ))}
