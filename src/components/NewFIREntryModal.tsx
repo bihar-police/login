@@ -467,8 +467,8 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
                     onChange={(e) => setSelectedDistrict(e.target.value)}
                     className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-amber-500"
                   >
-                    {effectiveDistricts.map((d) => (
-                      <option key={d.id || d.name} value={d.name}>
+                    {effectiveDistricts.map((d, idx) => (
+                      <option key={d.id || `${d.name}-${idx}`} value={d.name}>
                         🏛️ {d.name} District
                       </option>
                     ))}
@@ -493,8 +493,8 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
                     className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-amber-500"
                   >
                     {availableSubdivisions.length > 0 ? (
-                      availableSubdivisions.map((s) => (
-                        <option key={s.id || s.name} value={s.name}>
+                      availableSubdivisions.map((s, idx) => (
+                        <option key={s.id || `${s.name}-${idx}`} value={s.name}>
                           🏢 {s.name} Subdiv
                         </option>
                       ))
@@ -521,8 +521,8 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
                   disabled={Boolean(activePS)}
                   className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-amber-500 disabled:opacity-75 disabled:cursor-not-allowed"
                 >
-                  {filteredPoliceStations.map((st) => (
-                    <option key={st.id || st.name} value={st.name}>
+                  {filteredPoliceStations.map((st, idx) => (
+                    <option key={st.id || `${st.name}-${idx}`} value={st.name}>
                       👮 {st.name} PS
                     </option>
                   ))}
@@ -682,12 +682,12 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
 
             {/* Selected Crime Head Tags */}
             <div className="flex flex-wrap items-center gap-1.5 min-h-[32px] p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
-              {selectedCrimeHeads.map((head) => {
+              {selectedCrimeHeads.map((head, idx) => {
                 const config = getDynamicCrimeHeadsConfig();
                 const meta = config[head] || CRIME_HEADS_CONFIG[head as CrimeHead];
                 return (
                   <span
-                    key={head}
+                    key={`${head}-${idx}`}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-900 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800 animate-fadeIn"
                   >
                     <span>{meta?.icon || '⚖️'}</span>
@@ -717,11 +717,11 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
                 className="flex-1 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-xl p-2 text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               >
                 <option value="">+ Add or Toggle Another Crime Head (e.g. Arms Act, Attempt to Murder, Murder)...</option>
-                {ALL_CRIME_HEADS.map((headId) => {
+                {ALL_CRIME_HEADS.map((headId, idx) => {
                   const meta = CRIME_HEADS_CONFIG[headId];
                   const isSelected = selectedCrimeHeads.includes(headId);
                   return (
-                    <option key={headId} value={headId}>
+                    <option key={`${headId}-${idx}`} value={headId}>
                       {isSelected ? '✓ ' : '+ '} {meta?.icon || '⚖️'} {meta?.name || headId} ({meta?.hindiName || ''}) — {meta?.category || 'SLL'}
                     </option>
                   );
@@ -842,9 +842,9 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
 
             {accusedNames.length > 0 ? (
               <div className="flex flex-wrap gap-1.5 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
-                {accusedNames.map((name) => (
+                {accusedNames.map((name, idx) => (
                   <span
-                    key={name}
+                    key={`${name}-${idx}`}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
                   >
                     <span>{name}</span>
@@ -875,8 +875,8 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
               required
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-white font-semibold focus:ring-2 focus:ring-amber-500"
             >
-              {availableIOs.map((io) => (
-                <option key={io.id} value={io.name}>
+              {availableIOs.map((io, idx) => (
+                <option key={io.id || `${io.name}-${idx}`} value={io.name}>
                   {io.name} — ({io.rank}, {io.ps})
                 </option>
               ))}
