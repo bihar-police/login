@@ -28,7 +28,12 @@ import {
   formatReadableDate,
   isCaseCompleted,
   isCaseChargesheetedOrFinalForm,
+  getPSFromRole,
 } from '../utils/helpers';
+import {
+  getSubdivisionForPS,
+  getDistrictForPS,
+} from '../utils/jurisdictionHelpers';
 import { exportToExcel, generateDirectPDF } from '../utils/reportExport';
 import {
   FileSpreadsheet,
@@ -392,6 +397,99 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
   onViewCase,
 }) => {
   // -------------------------------------------------------------------------
+  // 0. JURISDICTION & LOGIN LEVEL CONTEXT
+  // -------------------------------------------------------------------------
+  const isAdministrator =
+    currentRole === 'ADMINISTRATOR' ||
+    currentRole === 'ADMIN' ||
+    currentUserAccount?.role === 'ADMINISTRATOR' ||
+    currentUserAccount?.role === 'ADMIN' ||
+    currentUserAccount?.userId?.toLowerCase() === 'admin';
+
+  const isDistrictLevel =
+    !isAdministrator &&
+    (currentRole === 'SP' ||
+      currentRole === 'DISTRICT_ADMIN' ||
+      currentUserAccount?.role === 'SP' ||
+      currentUserAccount?.role === 'DISTRICT_ADMIN' ||
+      currentUserAccount?.policeStation === 'District HQ');
+
+  const isSubdivisionLevel =
+    !isAdministrator &&
+    !isDistrictLevel &&
+    (currentRole === 'SDPO' ||
+      currentRole === 'CI' ||
+      currentUserAccount?.role === 'SDPO' ||
+      currentUserAccount?.role === 'CI' ||
+      currentUserAccount?.policeStation === 'Subdivision HQ');
+
+  const userDistrict = currentUserAccount?.district || 'Munger';
+  const userSubdivision = currentUserAccount?.subdivision || 'Tarapur';
+
+  const activeRolePS = getPSFromRole(currentRole) || (
+    !isAdministrator && !isDistrictLevel && !isSubdivisionLevel && currentUserAccount?.policeStation &&
+    currentUserAccount.policeStation !== 'District HQ' && currentUserAccount.policeStation !== 'Subdivision HQ' && currentUserAccount.policeStation !== 'State Police HQ'
+      ? currentUserAccount.policeStation
+      : null
+  );
+
+  const isPSLevel = Boolean(activeRolePS);
+
+  // -------------------------------------------------------------------------
+  // 0.1 BASE SCOPED CASES STRICTLY GOVERNED BY LOGIN LEVEL
+  // -------------------------------------------------------------------------
+  const baseScopedCases = useMemo(() => {
+    return cases.filter((c) => {
+      // 1. Station Level Lock
+      if (isPSLevel && activeRolePS) {
+        return c.ps.toLowerCase() === activeRolePS.toLowerCase();
+      }
+
+      // 2. Subdivisional Level Lock
+      if (isSubdivisionLevel) {
+        const cSubdiv = c.subdivision || getSubdivisionForPS(c.ps, availablePoliceStations);
+        return cSubdiv.toLowerCase() === userSubdivision.toLowerCase();
+      }
+
+      // 3. District Level Lock
+      if (isDistrictLevel) {
+        const cDist = c.district || getDistrictForPS(c.ps, availablePoliceStations);
+        return cDist.toLowerCase() === userDistrict.toLowerCase();
+      }
+
+      // 4. Administrator Level
+      return true;
+    });
+  }, [cases, isPSLevel, activeRolePS, isSubdivisionLevel, userSubdivision, isDistrictLevel, userDistrict, availablePoliceStations]);
+
+  // -------------------------------------------------------------------------
+  // 0.2 SCOPED POLICE STATIONS GOVERNED BY LOGIN LEVEL
+  // -------------------------------------------------------------------------
+  const effectiveScopedPSs = useMemo(() => {
+    if (isPSLevel && activeRolePS) {
+      const found = availablePoliceStations?.find((p) => p.name.toLowerCase() === activeRolePS.toLowerCase());
+      if (found) return [found];
+      return [{ id: `ps-${activeRolePS}`, name: activeRolePS, subdivisionName: userSubdivision, districtName: userDistrict }];
+    }
+    if (isSubdivisionLevel) {
+      const list = (availablePoliceStations && availablePoliceStations.length > 0 ? availablePoliceStations : INITIAL_POLICE_STATIONS).filter(
+        (p) => (p.subdivisionName || getSubdivisionForPS(p.name)).toLowerCase() === userSubdivision.toLowerCase()
+      );
+      return list;
+    }
+    if (isDistrictLevel) {
+      const list = (availablePoliceStations && availablePoliceStations.length > 0 ? availablePoliceStations : INITIAL_POLICE_STATIONS).filter(
+        (p) => (p.districtName || getDistrictForPS(p.name)).toLowerCase() === userDistrict.toLowerCase()
+      );
+      return list;
+    }
+    if (availablePoliceStations && availablePoliceStations.length > 0) {
+      return availablePoliceStations;
+    }
+    return INITIAL_POLICE_STATIONS;
+  }, [availablePoliceStations, isPSLevel, activeRolePS, isSubdivisionLevel, userSubdivision, isDistrictLevel, userDistrict]);
+
+  // -------------------------------------------------------------------------
   // 1. DYNAMIC STATUTORY CONFIG STATE
   // -------------------------------------------------------------------------
   const [statutoryConfig, setStatutoryConfig] = useState<Record<string, CrimeHeadMeta>>(() => getDynamicCrimeHeadsConfig());
@@ -514,28 +612,32 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
   const [reportCustomTitle, setReportCustomTitle] = useState<string>('Comprehensive Crime Head & Case Review Report');
 
   // -------------------------------------------------------------------------
-  // Police Station and IO Options
+  // Police Station and IO Options Scoped by Login Level
   // -------------------------------------------------------------------------
   const psOptions = useMemo(() => {
-    const list = availablePoliceStations && availablePoliceStations.length > 0
-      ? availablePoliceStations.map((p) => p.name)
-      : INITIAL_POLICE_STATIONS.map((p) => p.name);
+    const list = effectiveScopedPSs.map((p) => p.name);
     const set = new Set(list);
     return Array.from(set).map((ps) => ({
       value: ps,
       label: `${ps} PS`,
     }));
-  }, [availablePoliceStations]);
+  }, [effectiveScopedPSs]);
 
   const ioOptions = useMemo(() => {
     const map = new Map<string, { label: string; subtext: string }>();
+    const scopedPSSet = new Set(effectiveScopedPSs.map((p) => p.name.toLowerCase()));
+    if (activeRolePS) scopedPSSet.add(activeRolePS.toLowerCase());
+
     ios.forEach((io) => {
-      map.set(io.name, {
-        label: io.name,
-        subtext: `${io.rank} • ${io.ps} PS`,
-      });
+      if (scopedPSSet.has(io.ps.toLowerCase())) {
+        map.set(io.name, {
+          label: io.name,
+          subtext: `${io.rank} • ${io.ps} PS`,
+        });
+      }
     });
-    cases.forEach((c) => {
+
+    baseScopedCases.forEach((c) => {
       if (c.ioName && !map.has(c.ioName)) {
         map.set(c.ioName, {
           label: c.ioName,
@@ -543,12 +645,13 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
         });
       }
     });
+
     return Array.from(map.entries()).map(([name, meta]) => ({
       value: name,
       label: meta.label,
       subtext: meta.subtext,
     }));
-  }, [ios, cases]);
+  }, [ios, baseScopedCases, effectiveScopedPSs, activeRolePS]);
 
   const crimeHeadOptions = useMemo(() => {
     return Object.values(statutoryConfig).map((meta) => ({
@@ -653,7 +756,7 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
   // FILTERING LOGIC
   // -------------------------------------------------------------------------
   const filteredCases = useMemo(() => {
-    return cases.filter((c) => {
+    return baseScopedCases.filter((c) => {
       // Free search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -882,7 +985,7 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
       return true;
     });
   }, [
-    cases,
+    baseScopedCases,
     searchQuery,
     selectedCrimeHeads,
     crimeHeadMatchMode,
@@ -1029,7 +1132,7 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
   const handleResetAllFilters = () => {
     setSelectedCrimeHeads([]);
     setCrimeHeadMatchMode('ANY');
-    setSelectedPSs([]);
+    setSelectedPSs(isPSLevel && activeRolePS ? [activeRolePS] : []);
     setSelectedStatuses([]);
     setSelectedIOs([]);
     setSelectedDesignations([]);
@@ -1092,7 +1195,7 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
       {/* ========================================================================= */}
       <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
               <Sparkles className="w-3.5 h-3.5" />
               Report Engine Pro
@@ -1107,6 +1210,35 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
           <p className="text-xs text-slate-500 mt-1">
             Filter and cross-correlate across all crime heads (Match Any / Match All), register statuses, IO assignments, case review remarks, forensic visits, accused warrants, and special laws with PDF & CSV export.
           </p>
+
+          {/* Login Level Jurisdiction Badge */}
+          <div className="mt-2.5 flex items-center gap-2 flex-wrap text-xs">
+            <span className="font-bold text-slate-500 dark:text-slate-400">Login Level Scope:</span>
+            {isPSLevel && activeRolePS ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-extrabold shadow-2xs">
+                <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Station Level: {activeRolePS} PS (Locked)</span>
+              </span>
+            ) : isSubdivisionLevel ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300 font-extrabold shadow-2xs">
+                <Building className="w-3.5 h-3.5 text-blue-600" />
+                <span>Subdivision Level: {userSubdivision} Subdiv ({effectiveScopedPSs.length} Police Stations)</span>
+              </span>
+            ) : isDistrictLevel ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-purple-50 dark:bg-purple-950/60 border border-purple-300 dark:border-purple-800 text-purple-800 dark:text-purple-300 font-extrabold shadow-2xs">
+                <Building2 className="w-3.5 h-3.5 text-purple-600" />
+                <span>District Level: {userDistrict} District ({effectiveScopedPSs.length} Police Stations)</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-extrabold shadow-2xs">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>State Police HQ / Administrator Command</span>
+              </span>
+            )}
+            <span className="text-[11px] text-slate-400">
+              ({baseScopedCases.length} eligible cases in your jurisdiction)
+            </span>
+          </div>
         </div>
 
         {/* Action Buttons */}
@@ -1473,11 +1605,11 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {/* Police Stations Multi-Select */}
                   <MultiSelectDropdown
-                    label="Police Stations (PS)"
+                    label={isPSLevel && activeRolePS ? `Police Station (Locked: ${activeRolePS})` : "Police Stations (PS)"}
                     options={psOptions}
-                    selectedValues={selectedPSs}
-                    onChange={setSelectedPSs}
-                    placeholder="All Police Stations..."
+                    selectedValues={isPSLevel && activeRolePS ? [activeRolePS] : selectedPSs}
+                    onChange={isPSLevel ? () => {} : setSelectedPSs}
+                    placeholder={isPSLevel && activeRolePS ? `${activeRolePS} PS (Station Lock)` : "All Police Stations in Scope..."}
                     icon={<Building2 className="w-3 h-3 text-blue-500" />}
                     badgeColor="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300"
                   />
@@ -1991,10 +2123,27 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden space-y-0">
         {/* Table Controls Header */}
         <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <FolderOpen className="w-4 h-4 text-indigo-500" />
-            <h3 className="font-black text-sm text-slate-900 dark:text-white">
-              Report Data Preview ({sortedCases.length} Records)
+            <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+              <span>Report Data Preview ({sortedCases.length} Records)</span>
+              {isPSLevel && activeRolePS ? (
+                <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold border border-emerald-300 dark:border-emerald-800">
+                  {activeRolePS} PS Only
+                </span>
+              ) : isSubdivisionLevel ? (
+                <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 text-[10px] font-bold border border-blue-300 dark:border-blue-800">
+                  {userSubdivision} Subdiv Scope ({effectiveScopedPSs.length} PSs)
+                </span>
+              ) : isDistrictLevel ? (
+                <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 text-[10px] font-bold border border-purple-300 dark:border-purple-800">
+                  {userDistrict} District Scope ({effectiveScopedPSs.length} PSs)
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold border border-slate-300 dark:border-slate-700">
+                  State / Admin View
+                </span>
+              )}
             </h3>
             <span className="text-xs text-slate-400">
               Showing {activeFields.length} selected columns
