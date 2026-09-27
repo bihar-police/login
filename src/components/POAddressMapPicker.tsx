@@ -21,7 +21,14 @@ import {
   PlaceSuggestion,
   LOCAL_GEO_DATABASE,
 } from '../utils/geoCoder';
-import L from 'leaflet';
+
+// Safely obtain Leaflet instance from window.L (loaded via CDN in index.html) or global scope
+const getLeaflet = (): any => {
+  if (typeof window !== 'undefined' && (window as any).L) {
+    return (window as any).L;
+  }
+  return null;
+};
 
 export interface POAddressMapPickerProps {
   value: string;
@@ -62,8 +69,8 @@ export const POAddressMapPicker: React.FC<POAddressMapPickerProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const leafletMapRef = useRef<L.Map | null>(null);
-  const markerRef = useRef<L.Marker | null>(null);
+  const leafletMapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Close suggestions when clicking outside
@@ -218,7 +225,8 @@ export const POAddressMapPicker: React.FC<POAddressMapPickerProps> = ({
 
   // Update marker helper
   const updateMarker = useCallback((lat: number, lng: number, title?: string) => {
-    if (!leafletMapRef.current) return;
+    const L = getLeaflet();
+    if (!L || !leafletMapRef.current) return;
     const map = leafletMapRef.current;
 
     const pinHtml = `
@@ -246,8 +254,8 @@ export const POAddressMapPicker: React.FC<POAddressMapPickerProps> = ({
       }).addTo(map);
 
       // Drag event to pick new GR
-      marker.on('dragend', async (e: L.LeafletEvent) => {
-        const target = e.target as L.Marker;
+      marker.on('dragend', async (e: any) => {
+        const target = e.target;
         const newPos = target.getLatLng();
         const newLat = Number(newPos.lat.toFixed(5));
         const newLng = Number(newPos.lng.toFixed(5));
@@ -272,6 +280,8 @@ export const POAddressMapPicker: React.FC<POAddressMapPickerProps> = ({
   // Leaflet Map Initialization
   useEffect(() => {
     if (!isMapExpanded || !mapContainerRef.current) return;
+    const L = getLeaflet();
+    if (!L) return;
 
     if (!leafletMapRef.current) {
       const initialLat = latitude || 25.1228;
@@ -304,7 +314,7 @@ export const POAddressMapPicker: React.FC<POAddressMapPickerProps> = ({
       }).addTo(map);
 
       // CLICK ON MAP TO PICK GR
-      map.on('click', async (e: L.LeafletMouseEvent) => {
+      map.on('click', async (e: any) => {
         const clickedLat = Number(e.latlng.lat.toFixed(5));
         const clickedLng = Number(e.latlng.lng.toFixed(5));
         const newGr = formatGR(clickedLat, clickedLng);
@@ -341,8 +351,8 @@ export const POAddressMapPicker: React.FC<POAddressMapPickerProps> = ({
     } else {
       // Switch tile layer
       const map = leafletMapRef.current;
-      map.eachLayer((layer) => {
-        if (layer instanceof L.TileLayer) {
+      map.eachLayer((layer: any) => {
+        if (layer && (layer._url || (L.TileLayer && layer instanceof L.TileLayer))) {
           map.removeLayer(layer);
         }
       });
