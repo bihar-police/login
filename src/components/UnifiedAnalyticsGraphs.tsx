@@ -1939,8 +1939,8 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
                   className="px-2 py-1 bg-indigo-50/80 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 rounded-lg text-xs font-bold focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                 >
                   <option value="ALL">All Subdivisions (District View)</option>
-                  {subdivisionList.map((subdiv) => (
-                    <option key={subdiv} value={subdiv}>
+                  {subdivisionList.map((subdiv, idx) => (
+                    <option key={`subdiv-${subdiv}-${idx}`} value={subdiv}>
                       {subdiv} Subdivision
                     </option>
                   ))}
@@ -1967,8 +1967,8 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
                     ? 'All Police Stations'
                     : `All Police Stations in ${selectedSubdivision}`}
                 </option>
-                {psList.map((ps) => (
-                  <option key={ps} value={ps}>
+                {psList.map((ps, idx) => (
+                  <option key={`ps-${ps}-${idx}`} value={ps}>
                     {ps} Police Station
                   </option>
                 ))}
@@ -2124,13 +2124,13 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
             </div>
 
             <div className="max-h-56 overflow-y-auto pr-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {scopedIOs.map((io) => {
+              {scopedIOs.map((io, ioIdx) => {
                 const stats = ioMasterComparisonList.find((i) => i.name === io.name.trim());
                 const isSelected = selectedIOsForComparison.includes(io.name.trim());
 
                 return (
                   <div
-                    key={io.id || io.name}
+                    key={io.id || `scoped-io-${io.name}-${ioIdx}`}
                     onClick={() => toggleIOSelection(io.name.trim())}
                     className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex items-start gap-2.5 ${
                       isSelected
@@ -2190,9 +2190,9 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
 
           {chartData.legendGuide && (
             <div className="flex flex-wrap items-center gap-2">
-              {chartData.legendGuide.map((g) => (
+              {chartData.legendGuide.map((g, gIdx) => (
                 <div
-                  key={g.label}
+                  key={`guide-${g.label}-${gIdx}`}
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                 >
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: g.color }} />
@@ -2214,7 +2214,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {chartData.slices.map((slice, sIdx) => (
               <div
-                key={slice.label}
+                key={`multi-bar-${slice.label}-${sIdx}`}
                 onMouseEnter={(e) =>
                   showTooltip(e, {
                     title: slice.label,
@@ -2292,7 +2292,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
               const widthPercent = Math.max((slice.value / maxSliceValue) * 100, 4);
               return (
                 <div
-                  key={slice.label}
+                  key={`slice-gauge-${slice.label}-${idx}`}
                   onMouseEnter={(e) =>
                     showTooltip(e, {
                       title: slice.label,
@@ -2361,7 +2361,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
             <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[440px] overflow-y-auto pr-1">
               {chartData.slices.map((slice, idx) => (
                 <div
-                  key={slice.label}
+                  key={`slice-rose-list-${slice.label}-${idx}`}
                   onMouseEnter={(e) => {
                     setHoveredSlice(slice);
                     showTooltip(e, {
@@ -2403,7 +2403,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-1">
             {chartData.slices.map((slice, idx) => (
               <div
-                key={slice.label}
+                key={`slice-tree-${slice.label}-${idx}`}
                 onMouseEnter={(e) =>
                   showTooltip(e, {
                     title: slice.label,
@@ -2452,7 +2452,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {targetIOList.map((io) => {
+                {targetIOList.map((io, idx) => {
                   const getHeatStyle = (val: number) => {
                     if (val === 0) return 'bg-slate-50 dark:bg-slate-800/40 text-slate-400 font-normal';
                     if (val <= 2) return 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-bold';
@@ -2472,7 +2472,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
                   };
 
                   return (
-                    <tr key={io.name} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
+                    <tr key={(io as any).id || `heat-io-${io.name}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
                       <td className="p-3">
                         <div className="font-black text-slate-900 dark:text-white">{io.name}</div>
                         <div className="text-[10px] text-slate-500 dark:text-slate-400">{io.rank} • {io.ps} PS</div>
@@ -2570,7 +2570,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
             <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[440px] overflow-y-auto pr-1">
               {chartData.slices.map((slice, sIdx) => (
                 <div
-                  key={slice.label}
+                  key={`slice-polar-legend-${slice.label}-${sIdx}`}
                   onMouseEnter={(e) =>
                     showTooltip(e, {
                       title: slice.label,
@@ -2598,7 +2598,7 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {chartData.slices.map((slice, sIdx) => (
               <div
-                key={slice.label}
+                key={`slice-side-${slice.label}-${sIdx}`}
                 onMouseEnter={(e) =>
                   showTooltip(e, {
                     title: slice.label,
@@ -2701,8 +2701,8 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {sortedIOMasterList.map((io) => (
-                <tr key={io.name} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+              {sortedIOMasterList.map((io, idx) => (
+                <tr key={(io as any).id || `master-io-${io.name}-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <td className="p-3">
                     <div className="font-black text-slate-900 dark:text-white">{io.name}</div>
                     <div className="text-[10px] text-slate-500 dark:text-slate-400">{io.rank} • {io.ps} PS</div>
@@ -2781,8 +2781,8 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
 
           {hoverTooltip.metrics && hoverTooltip.metrics.length > 0 && (
             <div className="mt-2 pt-1.5 border-t border-slate-800/80 grid grid-cols-2 gap-1.5 text-[10px]">
-              {hoverTooltip.metrics.map((m) => (
-                <div key={m.name} className="flex items-center justify-between p-1 bg-slate-800/90 rounded border border-slate-700/50">
+              {hoverTooltip.metrics.map((m, mIdx) => (
+                <div key={`metric-${m.name}-${mIdx}`} className="flex items-center justify-between p-1 bg-slate-800/90 rounded border border-slate-700/50">
                   <span className="text-slate-400 truncate mr-1">{m.name}:</span>
                   <span className="font-bold shrink-0" style={{ color: m.color || '#fff' }}>{m.val}</span>
                 </div>
