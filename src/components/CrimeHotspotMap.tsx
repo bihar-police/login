@@ -49,6 +49,7 @@ import {
   ChevronRight,
   ChevronDown,
   X,
+  Check,
   ExternalLink,
   Target,
   Zap,
@@ -62,6 +63,7 @@ import {
   ALL_CRIME_HEADS,
   DEFAULT_CRIME_HEADS_CONFIG,
   StatutoryCategory,
+  doesCaseMatchCrimeHead,
 } from '../utils/crimeClassifier';
 
 export interface CrimeHotspotMapProps {
@@ -319,7 +321,10 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
 
   // Crime Head & Category Filters
   const [selectedStatutoryCategory, setSelectedStatutoryCategory] = useState<string>('ALL');
-  const [selectedCrimeHead, setSelectedCrimeHead] = useState<string>('ALL');
+  const [selectedCrimeHeads, setSelectedCrimeHeads] = useState<string[]>([]);
+  const [isCrimeHeadDropdownOpen, setIsCrimeHeadDropdownOpen] = useState<boolean>(false);
+  const [crimeHeadSearchQuery, setCrimeHeadSearchQuery] = useState<string>('');
+  const crimeHeadDropdownRef = useRef<HTMLDivElement>(null);
   const [selectedDesignation, setSelectedDesignation] = useState<'ALL' | 'SR' | 'NON_SR'>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'ACTIVE' | 'DISPOSED'>('ALL');
   const [timeRangeFilter, setTimeRangeFilter] = useState<'ALL' | '7_DAYS' | '30_DAYS' | '90_DAYS' | '1_YEAR'>('ALL');
@@ -374,6 +379,54 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
   const handleSubdivisionChange = (sub: string) => {
     setSelectedSubdivision(sub);
     setSelectedPS('ALL');
+  };
+
+  // Close crime head dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        crimeHeadDropdownRef.current &&
+        !crimeHeadDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsCrimeHeadDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filtered crime heads list based on search and optional statutory category
+  const filteredCrimeHeadsList = useMemo(() => {
+    let list: string[] = ALL_CRIME_HEADS;
+    if (selectedStatutoryCategory !== 'ALL') {
+      list = list.filter((head) => DEFAULT_CRIME_HEADS_CONFIG[head]?.category === selectedStatutoryCategory);
+    }
+    if (crimeHeadSearchQuery.trim()) {
+      const q = crimeHeadSearchQuery.toLowerCase();
+      list = list.filter((head) => {
+        const meta = DEFAULT_CRIME_HEADS_CONFIG[head];
+        return (
+          head.toLowerCase().includes(q) ||
+          meta?.hindiName?.toLowerCase().includes(q) ||
+          meta?.description?.toLowerCase().includes(q)
+        );
+      });
+    }
+    return list;
+  }, [selectedStatutoryCategory, crimeHeadSearchQuery]);
+
+  const toggleCrimeHead = (head: string) => {
+    setSelectedCrimeHeads((prev) =>
+      prev.includes(head) ? prev.filter((h) => h !== head) : [...prev, head]
+    );
+  };
+
+  const selectAllCrimeHeads = () => {
+    setSelectedCrimeHeads([...filteredCrimeHeadsList]);
+  };
+
+  const clearAllCrimeHeads = () => {
+    setSelectedCrimeHeads([]);
   };
 
   // Convert raw FIR Cases to Geocoded map data points
@@ -502,17 +555,24 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
         }
       }
 
-      // 6. Specific Crime Head Filter
-      if (selectedCrimeHead !== 'ALL') {
+      // 6. Specific Crime Head Filter (Multiple Selection Supported)
+      if (selectedCrimeHeads.length > 0) {
         const heads = getCaseCrimeHeads(c);
-        if (!heads.includes(selectedCrimeHead as CrimeHead) && c.crimeHead !== selectedCrimeHead) {
-          // Also check special flags
-          if (selectedCrimeHead === 'Arms Act (Illegal Weapons & Firing)' && !c.isArmsCase) return false;
-          if (selectedCrimeHead === 'NDPS (Narcotics & Drugs)' && !c.isNdpsCase) return false;
-          if (selectedCrimeHead === 'Excise / Prohibition / Liquor Cases' && !c.isLiquorCase) return false;
-          if (selectedCrimeHead !== 'Arms Act (Illegal Weapons & Firing)' && selectedCrimeHead !== 'NDPS (Narcotics & Drugs)' && selectedCrimeHead !== 'Excise / Prohibition / Liquor Cases') {
-            return false;
-          }
+        const matchesAny = selectedCrimeHeads.some((targetHead) => {
+          if (doesCaseMatchCrimeHead(c, targetHead)) return true;
+          if (heads.includes(targetHead as CrimeHead) || c.crimeHead === targetHead) return true;
+
+          const lowerTarget = targetHead.toLowerCase();
+          if (lowerTarget.includes('arms') && c.isArmsCase) return true;
+          if (lowerTarget.includes('ndps') && c.isNdpsCase) return true;
+          if ((lowerTarget.includes('excise') || lowerTarget.includes('liquor')) && c.isLiquorCase) return true;
+          if (p.primaryHead && (p.primaryHead === targetHead || p.primaryHead.toLowerCase().includes(lowerTarget))) return true;
+
+          return false;
+        });
+
+        if (!matchesAny) {
+          return false;
         }
       }
 
@@ -551,7 +611,7 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
     selectedStatus,
     timeRangeFilter,
     selectedStatutoryCategory,
-    selectedCrimeHead,
+    selectedCrimeHeads,
     searchQuery,
     availablePoliceStations,
   ]);
@@ -1235,24 +1295,192 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
             </select>
           </div>
 
-          {/* Specific Crime Head Selector (All Heads) */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5 text-rose-500" />
-              <span>Specific Crime Head</span>
-            </label>
-            <select
-              value={selectedCrimeHead}
-              onChange={(e) => setSelectedCrimeHead(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-hidden cursor-pointer"
+          {/* Specific Crime Head Multi-Select Selector */}
+          <div className="relative" ref={crimeHeadDropdownRef}>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 text-rose-500" />
+                <span>Specific Crime Head</span>
+                {selectedCrimeHeads.length > 0 && (
+                  <span className="bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded-full text-[10px] font-black">
+                    {selectedCrimeHeads.length}
+                  </span>
+                )}
+              </label>
+              {selectedCrimeHeads.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAllCrimeHeads}
+                  className="text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                >
+                  Clear ({selectedCrimeHeads.length})
+                </button>
+              )}
+            </div>
+
+            {/* Trigger Button */}
+            <button
+              type="button"
+              onClick={() => setIsCrimeHeadDropdownOpen(!isCrimeHeadDropdownOpen)}
+              className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-hidden cursor-pointer flex items-center justify-between gap-1.5 text-left transition hover:border-amber-400 dark:hover:border-amber-500"
             >
-              <option value="ALL">All Specific Crime Heads</option>
-              {ALL_CRIME_HEADS.map((head) => (
-                <option key={head} value={head}>
-                  {head}
-                </option>
-              ))}
-            </select>
+              <div className="truncate flex-1">
+                {selectedCrimeHeads.length === 0 ? (
+                  <span className="text-slate-600 dark:text-slate-400">All Specific Crime Heads</span>
+                ) : selectedCrimeHeads.length === 1 ? (
+                  <span className="text-amber-600 dark:text-amber-400 font-extrabold flex items-center gap-1.5 truncate">
+                    <span>{DEFAULT_CRIME_HEADS_CONFIG[selectedCrimeHeads[0]]?.icon || '📌'}</span>
+                    <span className="truncate">{selectedCrimeHeads[0]}</span>
+                  </span>
+                ) : (
+                  <span className="text-amber-600 dark:text-amber-400 font-extrabold flex items-center gap-1.5 truncate">
+                    <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0">
+                      {selectedCrimeHeads.length} Selected
+                    </span>
+                    <span className="truncate text-slate-800 dark:text-slate-200">
+                      {selectedCrimeHeads[0]} +{selectedCrimeHeads.length - 1} more
+                    </span>
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {selectedCrimeHeads.length > 0 && (
+                  <span
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearAllCrimeHeads();
+                    }}
+                    className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-400 hover:text-rose-500 cursor-pointer"
+                    title="Clear selected crime heads"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
+                    isCrimeHeadDropdownOpen ? 'rotate-180 text-amber-500' : ''
+                  }`}
+                />
+              </div>
+            </button>
+
+            {/* Dropdown Popover */}
+            {isCrimeHeadDropdownOpen && (
+              <div className="absolute top-full left-0 right-0 sm:right-auto sm:w-80 mt-1.5 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-2.5 space-y-2 max-w-[95vw] animate-in fade-in zoom-in-95 duration-150">
+                {/* Search Box */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={crimeHeadSearchQuery}
+                    onChange={(e) => setCrimeHeadSearchQuery(e.target.value)}
+                    placeholder="Search crime heads..."
+                    className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-500 outline-hidden"
+                    autoFocus
+                  />
+                  {crimeHeadSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setCrimeHeadSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Quick Actions Header */}
+                <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                  <span>
+                    {selectedCrimeHeads.length} of {ALL_CRIME_HEADS.length} selected
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllCrimeHeads}
+                      className="text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span>•</span>
+                    <button
+                      type="button"
+                      onClick={clearAllCrimeHeads}
+                      className="text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                {/* List of Heads with Checkboxes */}
+                <div className="max-h-60 overflow-y-auto space-y-1 pr-1">
+                  {filteredCrimeHeadsList.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-slate-400">
+                      No crime heads matching "{crimeHeadSearchQuery}"
+                    </div>
+                  ) : (
+                    filteredCrimeHeadsList.map((head) => {
+                      const isSelected = selectedCrimeHeads.includes(head);
+                      const meta = DEFAULT_CRIME_HEADS_CONFIG[head];
+                      return (
+                        <div
+                          key={head}
+                          onClick={() => toggleCrimeHead(head)}
+                          className={`p-2 rounded-xl text-xs flex items-center justify-between gap-2 cursor-pointer transition select-none ${
+                            isSelected
+                              ? 'bg-amber-50 dark:bg-amber-950/50 text-slate-900 dark:text-white font-extrabold border border-amber-300 dark:border-amber-800'
+                              : 'hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-medium'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div
+                              className={`w-4 h-4 rounded flex items-center justify-center border transition-colors shrink-0 ${
+                                isSelected
+                                  ? 'bg-amber-500 border-amber-500 text-slate-950'
+                                  : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                            </div>
+                            <span className="shrink-0">{meta?.icon || '📌'}</span>
+                            <div className="truncate">
+                              <div className="truncate leading-tight">{head}</div>
+                              {meta?.hindiName && (
+                                <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate font-normal">
+                                  {meta.hindiName}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {meta?.category && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0">
+                              {meta.category.split(' ')[0]}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Apply Button */}
+                <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400">
+                    Select multiple heads to combine
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsCrimeHeadDropdownOpen(false)}
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-lg text-xs cursor-pointer shadow-xs"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Time Window Recency Filter */}
@@ -1302,12 +1530,13 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
           {/* Quick Category Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full text-xs">
             <button
+              type="button"
               onClick={() => {
                 setSelectedStatutoryCategory('ALL');
-                setSelectedCrimeHead('ALL');
+                clearAllCrimeHeads();
               }}
               className={`px-3 py-1.5 rounded-xl font-extrabold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1 ${
-                selectedStatutoryCategory === 'ALL' && selectedCrimeHead === 'ALL'
+                selectedStatutoryCategory === 'ALL' && selectedCrimeHeads.length === 0
                   ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
               }`}
@@ -1316,12 +1545,13 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 setSelectedStatutoryCategory('Heinous & Violent');
-                setSelectedCrimeHead('ALL');
+                clearAllCrimeHeads();
               }}
               className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1 ${
-                selectedStatutoryCategory === 'Heinous & Violent'
+                selectedStatutoryCategory === 'Heinous & Violent' && selectedCrimeHeads.length === 0
                   ? 'bg-rose-600 text-white shadow-md'
                   : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 hover:bg-rose-100'
               }`}
@@ -1330,91 +1560,119 @@ export const CrimeHotspotMap: React.FC<CrimeHotspotMapProps> = ({
             </button>
 
             <button
-              onClick={() => {
-                setSelectedStatutoryCategory('Special & Local Laws (SLL)');
-                setSelectedCrimeHead('Arms Act (Illegal Weapons & Firing)');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1 ${
-                selectedCrimeHead === 'Arms Act (Illegal Weapons & Firing)'
-                  ? 'bg-purple-600 text-white shadow-md'
+              type="button"
+              onClick={() => toggleCrimeHead('Arms Act')}
+              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                selectedCrimeHeads.includes('Arms Act')
+                  ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-400/40'
                   : 'bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 hover:bg-purple-100'
               }`}
             >
               <span>🔫 Arms Act</span>
+              {selectedCrimeHeads.includes('Arms Act') && <Check className="w-3 h-3 stroke-[3]" />}
             </button>
 
             <button
-              onClick={() => {
-                setSelectedStatutoryCategory('Special & Local Laws (SLL)');
-                setSelectedCrimeHead('Excise / Prohibition / Liquor Cases');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1 ${
-                selectedCrimeHead === 'Excise / Prohibition / Liquor Cases'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
+              type="button"
+              onClick={() => toggleCrimeHead('Bihar Prohibition & Excise Act (Liquor)')}
+              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                selectedCrimeHeads.includes('Bihar Prohibition & Excise Act (Liquor)')
+                  ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400/40'
                   : 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 hover:bg-amber-100'
               }`}
             >
               <span>🍷 Excise / Liquor</span>
+              {selectedCrimeHeads.includes('Bihar Prohibition & Excise Act (Liquor)') && <Check className="w-3 h-3 stroke-[3]" />}
             </button>
 
             <button
-              onClick={() => {
-                setSelectedStatutoryCategory('Special & Local Laws (SLL)');
-                setSelectedCrimeHead('NDPS (Narcotics & Drugs)');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1 ${
-                selectedCrimeHead === 'NDPS (Narcotics & Drugs)'
-                  ? 'bg-orange-600 text-white shadow-md'
+              type="button"
+              onClick={() => toggleCrimeHead('NDPS Act')}
+              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                selectedCrimeHeads.includes('NDPS Act')
+                  ? 'bg-orange-600 text-white shadow-md ring-2 ring-orange-400/40'
                   : 'bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300 hover:bg-orange-100'
               }`}
             >
               <span>💊 NDPS</span>
+              {selectedCrimeHeads.includes('NDPS Act') && <Check className="w-3 h-3 stroke-[3]" />}
             </button>
 
             <button
-              onClick={() => {
-                setSelectedStatutoryCategory('Property & Economic');
-                setSelectedCrimeHead('Land Dispute & Violent Clash');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1 ${
-                selectedCrimeHead === 'Land Dispute & Violent Clash'
-                  ? 'bg-sky-600 text-white shadow-md'
+              type="button"
+              onClick={() => toggleCrimeHead('Land Dispute / Rioting')}
+              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                selectedCrimeHeads.includes('Land Dispute / Rioting')
+                  ? 'bg-sky-600 text-white shadow-md ring-2 ring-sky-400/40'
                   : 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300 hover:bg-sky-100'
               }`}
             >
               <span>⚔️ Land Disputes</span>
+              {selectedCrimeHeads.includes('Land Dispute / Rioting') && <Check className="w-3 h-3 stroke-[3]" />}
             </button>
 
             <button
-              onClick={() => {
-                setSelectedStatutoryCategory('Property & Economic');
-                setSelectedCrimeHead('Theft & Burglary');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1 ${
-                selectedCrimeHead === 'Theft & Burglary'
-                  ? 'bg-blue-600 text-white shadow-md'
+              type="button"
+              onClick={() => toggleCrimeHead('Theft')}
+              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                selectedCrimeHeads.includes('Theft')
+                  ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400/40'
                   : 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 hover:bg-blue-100'
               }`}
             >
-              <span>💰 Theft / Loot</span>
+              <span>💰 Theft</span>
+              {selectedCrimeHeads.includes('Theft') && <Check className="w-3 h-3 stroke-[3]" />}
             </button>
 
             <button
-              onClick={() => {
-                setSelectedStatutoryCategory('Women & Children');
-                setSelectedCrimeHead('ALL');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1 ${
-                selectedStatutoryCategory === 'Women & Children'
-                  ? 'bg-pink-600 text-white shadow-md'
+              type="button"
+              onClick={() => toggleCrimeHead('POCSO Act')}
+              className={`px-3 py-1.5 rounded-xl font-bold text-[11px] whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                selectedCrimeHeads.includes('POCSO Act')
+                  ? 'bg-pink-600 text-white shadow-md ring-2 ring-pink-400/40'
                   : 'bg-pink-50 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300 hover:bg-pink-100'
               }`}
             >
-              <span>🛡️ Women / POCSO</span>
+              <span>🛡️ POCSO Act</span>
+              {selectedCrimeHeads.includes('POCSO Act') && <Check className="w-3 h-3 stroke-[3]" />}
             </button>
           </div>
 
         </div>
+
+        {/* Active Multi-Selected Crime Heads Pills */}
+        {selectedCrimeHeads.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <Filter className="w-3 h-3 text-amber-500" />
+              <span>Active Selected Heads ({selectedCrimeHeads.length}):</span>
+            </span>
+            {selectedCrimeHeads.map((head) => (
+              <span
+                key={head}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-800 shadow-2xs"
+              >
+                <span>{DEFAULT_CRIME_HEADS_CONFIG[head]?.icon || '📌'}</span>
+                <span>{head}</span>
+                <button
+                  type="button"
+                  onClick={() => toggleCrimeHead(head)}
+                  className="p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800 rounded-md text-amber-700 dark:text-amber-300 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer transition-colors"
+                  title={`Remove ${head}`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            <button
+              type="button"
+              onClick={clearAllCrimeHeads}
+              className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline px-1.5 cursor-pointer ml-1"
+            >
+              Clear All ({selectedCrimeHeads.length})
+            </button>
+          </div>
+        )}
 
         {/* Tier 3: Map View Controls & Tactical Layer Toggles */}
         <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
