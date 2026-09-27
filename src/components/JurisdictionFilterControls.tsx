@@ -101,8 +101,8 @@ export const JurisdictionFilterControls: React.FC<JurisdictionFilterControlsProp
             title="Filter by Police District"
           >
             {includeAllOption && <option value="ALL">All Districts (State View)</option>}
-            {effectiveDistricts.map((d) => (
-              <option key={d.id || d.name} value={d.name}>
+            {effectiveDistricts.map((d, idx) => (
+              <option key={d.id || `${d.name}-${idx}`} value={d.name}>
                 {d.name} District
               </option>
             ))}
@@ -135,8 +135,8 @@ export const JurisdictionFilterControls: React.FC<JurisdictionFilterControlsProp
                 {isDistrictLevel ? 'All Subdivisions (District View)' : 'All Subdivisions'}
               </option>
             )}
-            {availableSubdivisions.map((s) => (
-              <option key={s.id || s.name} value={s.name}>
+            {availableSubdivisions.map((s, idx) => (
+              <option key={s.id || `${s.name}-${idx}`} value={s.name}>
                 {s.name} Subdiv
               </option>
             ))}
@@ -166,8 +166,8 @@ export const JurisdictionFilterControls: React.FC<JurisdictionFilterControlsProp
           >
             {includeAllOption && <option value="ALL">All Police Stations</option>}
             <option value="Subdivision HQ">Subdivision HQ</option>
-            {availableStations.map((ps) => (
-              <option key={ps.id || ps.name} value={ps.name}>
+            {availableStations.map((ps, idx) => (
+              <option key={ps.id || `${ps.name}-${idx}`} value={ps.name}>
                 {ps.name} PS
               </option>
             ))}
