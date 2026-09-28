@@ -396,6 +396,12 @@ export interface DailyCrimeReport {
   arrestDetails?: ArrestDetails;
   rankStrengths?: RankStrengthDetails[];
   leaveLedgerEntries?: LeaveLedgerEntry[];
+  arrivedYesterdayEntries?: {
+    id: string;
+    officerName: string;
+    rank: OfficerLeaveRank;
+    actualArrivalDate: string;
+  }[];
   seizuresSummary?: string;
   majorIncidentsNotes?: string;
   submittedBy: string;
