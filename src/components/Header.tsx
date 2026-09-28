@@ -27,6 +27,7 @@ import {
   ClipboardCheck,
   PieChart as PieChartIcon,
   Flame,
+  Compass,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -555,6 +556,21 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Crime Hotspots</span>
             <span className="px-1 py-0.2 text-[8px] uppercase font-black bg-rose-500/20 text-rose-300 border border-rose-400/30 rounded-full">
               GPS
+            </span>
+          </button>
+
+          <button
+            onClick={() => onTabChange('official_registers')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer ${
+              activeTab === 'official_registers'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <FileText className="w-3 h-3 text-blue-400" />
+            <span>Official Registers</span>
+            <span className="px-1 py-0.2 text-[8px] uppercase font-black bg-blue-500/20 text-blue-300 border border-blue-400/30 rounded-full">
+              Ledger
             </span>
           </button>
 
