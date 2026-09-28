@@ -140,7 +140,38 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   subdivisions,
   currentUserAccount,
 }) => {
-  const activePS = getPSFromRole(currentRole);
+  const activePS = useMemo(() => {
+    const isAdministrator =
+      currentRole === 'ADMINISTRATOR' ||
+      currentUserAccount?.role === 'ADMINISTRATOR' ||
+      currentUserAccount?.userId?.toLowerCase() === 'admin';
+
+    const isDistrictLevel =
+      !isAdministrator &&
+      (currentRole === 'SP' ||
+        currentRole === 'DISTRICT_ADMIN' ||
+        currentUserAccount?.role === 'SP' ||
+        currentUserAccount?.role === 'DISTRICT_ADMIN' ||
+        currentUserAccount?.policeStation === 'District HQ');
+
+    const isSubdivisionLevel =
+      !isAdministrator &&
+      !isDistrictLevel &&
+      (currentRole === 'SDPO' ||
+        currentRole === 'CI' ||
+        currentUserAccount?.role === 'SDPO' ||
+        currentUserAccount?.role === 'CI' ||
+        currentUserAccount?.policeStation === 'Subdivision HQ');
+
+    const userPS =
+      currentUserAccount?.policeStation &&
+      currentUserAccount.policeStation !== 'District HQ' &&
+      currentUserAccount.policeStation !== 'Subdivision HQ'
+        ? currentUserAccount.policeStation
+        : getPSFromRole(currentRole);
+
+    return isAdministrator || isDistrictLevel || isSubdivisionLevel ? null : userPS;
+  }, [currentRole, currentUserAccount]);
 
   // View Mode: 'roster' (cards) vs 'ledger' (leave ledger table) vs 'duties' (duty register)
   const [viewMode, setViewMode] = useState<'roster' | 'ledger' | 'duties'>('roster');
