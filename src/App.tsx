@@ -1097,6 +1097,13 @@ export default function App() {
         return [...toAdd, ...prev];
       });
     }
+
+    // Auto-sync rejoining officers who arrived yesterday from leave
+    if (newReport.arrivedYesterdayEntries && newReport.arrivedYesterdayEntries.length > 0) {
+      newReport.arrivedYesterdayEntries.forEach((arr) => {
+        handleUpdateLeaveStatus(arr.id, 'ARRIVED', arr.actualArrivalDate);
+      });
+    }
   };
 
   const handleUpdateLeaveStatus = (leaveId: string, status: 'ON_LEAVE' | 'ARRIVED' | 'OVERDUE', actualArrivalDate?: string) => {
