@@ -89,11 +89,6 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
   const isSuperUser = currentRole === 'SDPO' || currentRole === 'SP' || currentRole === 'DISTRICT_ADMIN' || currentRole === 'ADMINISTRATOR';
   const isCI = currentRole === 'CI';
 
-  const psOptions =
-    availablePoliceStations && availablePoliceStations.length > 0
-      ? Array.from(new Set(availablePoliceStations.map((p) => p.name)))
-      : Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name)));
-
   const [activeSubTab, setActiveSubTab] = useState<'UD' | 'NON_SR'>('NON_SR');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingUD, setEditingUD] = useState<UDCase | null>(null);
@@ -101,6 +96,20 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
   // Jurisdiction Filter States
   const [districtFilter, setDistrictFilter] = useState<string>('ALL');
   const [subdivisionFilter, setSubdivisionFilter] = useState<string>('ALL');
+
+  const psOptions = useMemo(() => {
+    const base = availablePoliceStations && availablePoliceStations.length > 0
+      ? availablePoliceStations
+      : INITIAL_POLICE_STATIONS;
+    
+    const filtered = base.filter((p) => {
+      if (districtFilter !== 'ALL' && p.districtName && p.districtName.toLowerCase() !== districtFilter.toLowerCase()) return false;
+      if (subdivisionFilter !== 'ALL' && p.subdivisionName && p.subdivisionName.toLowerCase() !== subdivisionFilter.toLowerCase()) return false;
+      return true;
+    });
+    
+    return Array.from(new Set(filtered.map((p) => p.name)));
+  }, [availablePoliceStations, districtFilter, subdivisionFilter]);
 
   // New UD Form State
   const todayStr = new Date().toISOString().split('T')[0];
@@ -305,7 +314,10 @@ export const UDCaseSection: React.FC<UDCaseSectionProps> = ({
   }, [
     activePS,
     nonSrCases,
+    districtFilter,
+    subdivisionFilter,
     psFilter,
+    availablePoliceStations,
     statusFilter,
     chargesheetedFilter,
     deadlineLimitFilter,
