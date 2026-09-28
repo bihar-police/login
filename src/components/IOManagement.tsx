@@ -687,12 +687,34 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   };
 
   // Options
+  // Filter stationOptions based on the user's authorized jurisdiction context
+  const filteredPoliceStations = useMemo(() => {
+    const allStations = availablePoliceStations && availablePoliceStations.length > 0
+      ? availablePoliceStations
+      : INITIAL_POLICE_STATIONS;
+
+    return allStations.filter((p) => {
+      if (isAdministrator) return true;
+      if (isDistrictLevel) {
+        const dist = p.districtName || getDistrictForPS(p.name, allStations);
+        return dist.toLowerCase() === userDistrict.toLowerCase();
+      }
+      if (isSubdivisionLevel) {
+        const subdiv = p.subdivisionName || getSubdivisionForPS(p.name, allStations);
+        return subdiv.toLowerCase() === userSubdivision.toLowerCase();
+      }
+      if (isPSLevel) {
+        const myPs = currentUserAccount?.policeStation || activePS;
+        if (!myPs || myPs === 'ALL') return true;
+        return p.name.toLowerCase() === myPs.toLowerCase();
+      }
+      return true;
+    });
+  }, [availablePoliceStations, isAdministrator, isDistrictLevel, isSubdivisionLevel, isPSLevel, userDistrict, userSubdivision, currentUserAccount, activePS]);
+
   const stationOptions = [
     { label: 'Subdivision HQ', value: 'Subdivision HQ' },
-    ...((availablePoliceStations && availablePoliceStations.length > 0
-      ? availablePoliceStations
-      : INITIAL_POLICE_STATIONS
-    ).map((p) => ({ label: `${p.name} PS`, value: p.name }))),
+    ...filteredPoliceStations.map((p) => ({ label: `${p.name} PS`, value: p.name })),
   ];
 
   const statusOptions = [
