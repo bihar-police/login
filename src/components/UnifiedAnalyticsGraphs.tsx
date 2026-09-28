@@ -54,6 +54,7 @@ import {
 import { getDeadlineInfo, formatReadableDate } from '../utils/helpers';
 import { exportToExcel } from '../utils/reportExport';
 import { CrimeSpectrumComparison } from './CrimeSpectrumComparison';
+import { INITIAL_SUBDIVISIONS, INITIAL_POLICE_STATIONS } from '../data/mockData';
 
 interface UnifiedAnalyticsGraphsProps {
   cases: FIRCase[];
@@ -162,14 +163,40 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
 
   const subdivisionList = useMemo(() => {
     const set = new Set<string>();
+    
+    // Determine the active district
+    const activeDistrict = currentUserAccount?.district && currentUserAccount.district !== 'ALL'
+      ? currentUserAccount.district
+      : 'Munger'; // fallback
+
+    const isAllDistricts = !currentUserAccount?.district || currentUserAccount.district === 'ALL';
+
+    // 1. Add subdivisions from INITIAL_SUBDIVISIONS that belong to the active district
+    INITIAL_SUBDIVISIONS.forEach((subdiv) => {
+      if (isAllDistricts || (subdiv.districtName && subdiv.districtName.toLowerCase() === activeDistrict.toLowerCase())) {
+        set.add(subdiv.name);
+      }
+    });
+
+    // 2. Add any dynamic subdivisions from availablePoliceStations belonging to the active district
     availablePoliceStations.forEach((ps) => {
-      if (ps.subdivisionName) set.add(ps.subdivisionName);
+      if (ps.subdivisionName && ps.districtName) {
+        if (isAllDistricts || ps.districtName.toLowerCase() === activeDistrict.toLowerCase()) {
+          set.add(ps.subdivisionName);
+        }
+      }
     });
+
+    // 3. Add subdivisions from cases that match the district
     cases.forEach((c) => {
-      if (c.subdivision) set.add(c.subdivision);
+      const cDist = c.district || 'Munger';
+      if (c.subdivision && (isAllDistricts || cDist.toLowerCase() === activeDistrict.toLowerCase())) {
+        set.add(c.subdivision);
+      }
     });
+
     return Array.from(set);
-  }, [availablePoliceStations, cases]);
+  }, [availablePoliceStations, cases, currentUserAccount]);
 
   const isDistrictOrStateAdmin =
     currentRole === 'ADMINISTRATOR' ||
@@ -1591,6 +1618,18 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
 
   const psList = useMemo(() => {
     let stations = availablePoliceStations;
+    
+    // Determine active district
+    const activeDistrict = currentUserAccount?.district && currentUserAccount.district !== 'ALL'
+      ? currentUserAccount.district
+      : null;
+
+    if (activeDistrict) {
+      stations = stations.filter(
+        (p) => p.districtName && p.districtName.toLowerCase() === activeDistrict.toLowerCase()
+      );
+    }
+
     if (selectedSubdivision !== 'ALL') {
       stations = stations.filter(
         (p) => (p.subdivisionName || '').toLowerCase() === selectedSubdivision.toLowerCase()
@@ -1601,15 +1640,18 @@ export const UnifiedAnalyticsGraphs: React.FC<UnifiedAnalyticsGraphsProps> = ({
       new Set(
         cases
           .filter(
-            (c) =>
-              selectedSubdivision === 'ALL' ||
-              (c.subdivision || psToSubdivisionMap.get(c.ps.toLowerCase()) || '').toLowerCase() ===
-                selectedSubdivision.toLowerCase()
+            (c) => {
+              const cDist = c.district || 'Munger';
+              if (activeDistrict && cDist.toLowerCase() !== activeDistrict.toLowerCase()) return false;
+              return selectedSubdivision === 'ALL' ||
+                (c.subdivision || psToSubdivisionMap.get(c.ps.toLowerCase()) || '').toLowerCase() ===
+                  selectedSubdivision.toLowerCase();
+            }
           )
           .map((c) => c.ps)
       )
     );
-  }, [availablePoliceStations, cases, selectedSubdivision, psToSubdivisionMap]);
+  }, [availablePoliceStations, cases, selectedSubdivision, psToSubdivisionMap, currentUserAccount]);
 
   return (
     <div className="space-y-3.5">
