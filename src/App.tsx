@@ -1376,6 +1376,13 @@ export default function App() {
       if (c.punishmentTerm !== filters.punishmentFilter) return false;
     }
 
+    // Crime Head Filter
+    if (filters.crimeHeads && filters.crimeHeads.length > 0) {
+      const caseHeads = c.crimeHeads || (c.crimeHead ? [c.crimeHead] : []);
+      const hasMatch = caseHeads.some((head) => filters.crimeHeads!.includes(head));
+      if (!hasMatch) return false;
+    }
+
     // CCTNS Sync Filter
     if (filters.cctnsSyncFilter === 'CS_SYNC' && (!c.chargesheetUploadedCCTNS || c.caseDiaryUploadedCCTNS)) return false;
     if (filters.cctnsSyncFilter === 'CD_SYNC' && (!c.caseDiaryUploadedCCTNS || c.chargesheetUploadedCCTNS)) return false;
