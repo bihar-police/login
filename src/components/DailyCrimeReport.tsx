@@ -96,7 +96,6 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
   districts,
   subdivisions,
 }) => {
-  const activePS = getPSFromRole(currentRole);
   const isSuperUser = currentRole === 'SDPO' || currentRole === 'SP' || currentRole === 'ADMINISTRATOR' || currentRole === 'DISTRICT_ADMIN';
 
   // Sub-tab inside Daily Reports: Dashboard, Diary Log, Historical Register, or Messages
@@ -110,6 +109,15 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
 
   const { isAdministrator, isDistrictLevel, isSubdivisionLevel, userDistrict, userSubdivision } =
     getUserJurisdictionContext(currentRole, currentUserAccount);
+
+  const userPS =
+    currentUserAccount?.policeStation &&
+    currentUserAccount.policeStation !== 'District HQ' &&
+    currentUserAccount.policeStation !== 'Subdivision HQ'
+      ? currentUserAccount.policeStation
+      : getPSFromRole(currentRole);
+
+  const activePS = isAdministrator || isDistrictLevel || isSubdivisionLevel ? null : userPS;
 
   const [logsDistrict, setLogsDistrict] = useState<string>(isAdministrator ? 'ALL' : userDistrict);
   const [logsSubdivision, setLogsSubdivision] = useState<string>(isSubdivisionLevel ? userSubdivision : 'ALL');
