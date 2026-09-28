@@ -55,7 +55,7 @@ import { JurisdictionManagementModal } from './components/JurisdictionManagement
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { CaseQRCodeModal } from './components/CaseQRCodeModal';
 import { FieldVerificationView } from './components/FieldVerificationView';
-import { ActivePatrolTrackerView } from './components/activePatrolTrackerView';
+import { ActivePatrolTrackerView } from './components/GastiPatrolTrackerView';
 import { isSupabaseConfigured } from './lib/supabase';
 import {
   fetchUserAccountsFromSupabase,
