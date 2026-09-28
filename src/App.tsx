@@ -1101,21 +1101,30 @@ export default function App() {
     // Auto-sync rejoining officers who arrived yesterday from leave
     if (newReport.arrivedYesterdayEntries && newReport.arrivedYesterdayEntries.length > 0) {
       newReport.arrivedYesterdayEntries.forEach((arr) => {
-        handleUpdateLeaveStatus(arr.id, 'ARRIVED', arr.actualArrivalDate);
+        handleUpdateLeaveStatus(arr.id, 'ARRIVED', arr.actualArrivalDate, arr.officerName);
       });
     }
   };
 
-  const handleUpdateLeaveStatus = (leaveId: string, status: 'ON_LEAVE' | 'ARRIVED' | 'OVERDUE', actualArrivalDate?: string) => {
+  const handleUpdateLeaveStatus = (leaveId: string, status: 'ON_LEAVE' | 'ARRIVED' | 'OVERDUE', actualArrivalDate?: string, officerNameFallback?: string) => {
     if (isReadOnly) {
       alert('Permission Denied: Your account has view-only access to the leave ledger.');
       return;
     }
     setLeaveLedger((prev) => {
+      let matchId = leaveId;
       const exists = prev.some((item) => item.id === leaveId);
-      if (exists) {
+      if (!exists && officerNameFallback) {
+        const found = prev.find((item) => item.officerName.toLowerCase() === officerNameFallback.toLowerCase() && item.status === 'ON_LEAVE');
+        if (found) {
+          matchId = found.id;
+        }
+      }
+
+      const finalExists = prev.some((item) => item.id === matchId);
+      if (finalExists) {
         return prev.map((item) => {
-          if (item.id === leaveId) {
+          if (item.id === matchId) {
             const updated: LeaveLedgerEntry = {
               ...item,
               status,
@@ -1129,7 +1138,7 @@ export default function App() {
       } else {
         let foundEntry: LeaveLedgerEntry | undefined;
         for (const r of dailyReports) {
-          const entry = (r.leaveLedgerEntries || []).find((e) => e.id === leaveId);
+          const entry = (r.leaveLedgerEntries || []).find((e) => e.id === matchId || (officerNameFallback && e.officerName.toLowerCase() === officerNameFallback.toLowerCase() && e.status === 'ON_LEAVE'));
           if (entry) {
             foundEntry = entry;
             break;
@@ -1150,10 +1159,11 @@ export default function App() {
 
     setDailyReports((prev) =>
       prev.map((report) => {
-        const hasLeave = (report.leaveLedgerEntries || []).some((e) => e.id === leaveId);
+        const onLeaveList = report.leaveLedgerEntries || [];
+        const hasLeave = onLeaveList.some((e) => e.id === leaveId || (officerNameFallback && e.officerName.toLowerCase() === officerNameFallback.toLowerCase() && e.status === 'ON_LEAVE'));
         if (hasLeave) {
-          const updatedEntries = (report.leaveLedgerEntries || []).map((e) => {
-            if (e.id === leaveId) {
+          const updatedEntries = onLeaveList.map((e) => {
+            if (e.id === leaveId || (officerNameFallback && e.officerName.toLowerCase() === officerNameFallback.toLowerCase() && e.status === 'ON_LEAVE')) {
               return {
                 ...e,
                 status,
