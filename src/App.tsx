@@ -55,7 +55,6 @@ import { JurisdictionManagementModal } from './components/JurisdictionManagement
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { CaseQRCodeModal } from './components/CaseQRCodeModal';
 import { FieldVerificationView } from './components/FieldVerificationView';
-import { ActivePatrolTrackerView } from './components/GastiPatrolTrackerView';
 import { isSupabaseConfigured } from './lib/supabase';
 import {
   fetchUserAccountsFromSupabase,
@@ -327,23 +326,6 @@ export default function App() {
   const [qrModalCase, setQrModalCase] = useState<FIRCase | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
 
-  // Gasti GPS Public Tracker State
-  const [activeTrackingTeamId, setActiveTrackingTeamId] = useState<string | null>(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const trackId = params.get('track_gasti') || params.get('track_patrol') || params.get('gasti_id');
-      if (trackId) return trackId;
-
-      const hash = window.location.hash;
-      if (hash.startsWith('#track/')) {
-        return hash.replace('#track/', '');
-      }
-    } catch {
-      // ignore
-    }
-    return null;
-  });
-
   useEffect(() => {
     const handlePopState = () => {
       try {
@@ -353,13 +335,6 @@ export default function App() {
           setActiveVerificationCaseId(verifyId);
         } else if (window.location.hash.startsWith('#verify/')) {
           setActiveVerificationCaseId(window.location.hash.replace('#verify/', ''));
-        }
-
-        const trackId = params.get('track_gasti') || params.get('track_patrol') || params.get('gasti_id');
-        if (trackId) {
-          setActiveTrackingTeamId(trackId);
-        } else if (window.location.hash.startsWith('#track/')) {
-          setActiveTrackingTeamId(window.location.hash.replace('#track/', ''));
         }
       } catch {
         // ignore
@@ -387,22 +362,6 @@ export default function App() {
       url.searchParams.delete('verify_fir');
       url.searchParams.delete('case_id');
       if (url.hash.startsWith('#verify/')) {
-        url.hash = '';
-      }
-      window.history.pushState({}, '', url.toString());
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleExitTracking = () => {
-    setActiveTrackingTeamId(null);
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('track_gasti');
-      url.searchParams.delete('track_patrol');
-      url.searchParams.delete('gasti_id');
-      if (url.hash.startsWith('#track/')) {
         url.hash = '';
       }
       window.history.pushState({}, '', url.toString());
@@ -1485,16 +1444,6 @@ export default function App() {
         onLoginPortal={() => {
           handleExitVerification();
         }}
-      />
-    );
-  }
-
-  // Gasti Public Active GPS Mobile Tracker view
-  if (activeTrackingTeamId) {
-    return (
-      <ActivePatrolTrackerView
-        teamId={activeTrackingTeamId}
-        onExit={handleExitTracking}
       />
     );
   }
