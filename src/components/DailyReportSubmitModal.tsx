@@ -59,6 +59,21 @@ interface DailyReportSubmitModalProps {
   leaveLedger?: LeaveLedgerEntry[];
 }
 
+const doesOfficerRankMatchLeaveRank = (ioRank: string, leaveRank: string): boolean => {
+  const ioR = (ioRank || '').toLowerCase();
+  const leaveR = (leaveRank || '').toLowerCase();
+  if (leaveR === 'inspector') {
+    return ioR.includes('inspector');
+  }
+  if (leaveR === 'sub-inspector (si)' || leaveR === 'si') {
+    return ioR.includes('sub-inspector') || ioR === 'si';
+  }
+  if (leaveR === 'asi & ptc') {
+    return ioR.includes('asst. sub-inspector') || ioR.includes('asi') || ioR.includes('ptc');
+  }
+  return false;
+};
+
 const DEFAULT_RANKS: RankStrengthDetails['rank'][] = [
   'Inspector',
   'Sub-Inspector (SI)',
@@ -381,19 +396,23 @@ interface EnhancedCaseArrestItem {
     reportDate.setDate(reportDate.getDate() - 1);
     const yesterdayDateStr = reportDate.toISOString().split('T')[0];
 
-    const eligible = onLeaveOfficers.filter(
-      (l) => !arrivedOfficers.some((a) => a.id === l.id)
+    const defaultRank: OfficerLeaveRank = 'Sub-Inspector (SI)';
+    
+    // Find any available IO of this rank as default
+    const filteredIOs = nonConstableOfficers.filter((io) =>
+      doesOfficerRankMatchLeaveRank(io.rank, defaultRank)
     );
-    if (eligible.length === 0) {
-      alert("No officers currently registered on leave at this station.");
-      return;
-    }
+    const defaultOfficerName = filteredIOs[0]?.name || '';
 
-    const defaultLeave = eligible[0];
+    // Check if they have an active leave record
+    const matchedLeave = onLeaveOfficers.find(
+      (l) => l.officerName.toLowerCase() === defaultOfficerName.toLowerCase() && l.rank === defaultRank
+    );
+
     const newArrival = {
-      id: defaultLeave.id,
-      officerName: defaultLeave.officerName,
-      rank: defaultLeave.rank,
+      id: matchedLeave ? matchedLeave.id : `no-leave-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      officerName: defaultOfficerName,
+      rank: defaultRank,
       actualArrivalDate: yesterdayDateStr,
     };
     setArrivedOfficers((prev) => [...prev, newArrival]);
@@ -406,22 +425,50 @@ interface EnhancedCaseArrestItem {
   const handleUpdateArrivedOfficer = (id: string, field: 'id' | 'actualArrivalDate', val: string) => {
     setArrivedOfficers((prev) =>
       prev.map((a) => {
-        if (a.id === id && field === 'id') {
-          const matchedLeave = onLeaveOfficers.find((l) => l.id === val);
-          if (matchedLeave) {
-            return {
-              ...a,
-              id: val,
-              officerName: matchedLeave.officerName,
-              rank: matchedLeave.rank,
-            };
-          }
-        } else if (a.id === id && field === 'actualArrivalDate') {
+        if (a.id === id && field === 'actualArrivalDate') {
           return { ...a, actualArrivalDate: val };
         }
         return a;
       })
     );
+  };
+
+  const handleUpdateArrivedOfficerRank = (idx: number, newRank: OfficerLeaveRank) => {
+    setArrivedOfficers((prev) => {
+      const next = [...prev];
+      const filteredIOs = nonConstableOfficers.filter((io) =>
+        doesOfficerRankMatchLeaveRank(io.rank, newRank)
+      );
+      const defaultOfficerName = filteredIOs[0]?.name || '';
+      const matchedLeave = onLeaveOfficers.find(
+        (l) => l.officerName.toLowerCase() === defaultOfficerName.toLowerCase() && l.rank === newRank
+      );
+
+      next[idx] = {
+        ...next[idx],
+        rank: newRank,
+        id: matchedLeave ? matchedLeave.id : `no-leave-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 5)}`,
+        officerName: defaultOfficerName,
+      };
+      return next;
+    });
+  };
+
+  const handleUpdateArrivedOfficerName = (idx: number, name: string) => {
+    setArrivedOfficers((prev) => {
+      const next = [...prev];
+      const item = next[idx];
+      const matchedLeave = onLeaveOfficers.find(
+        (l) => l.officerName.toLowerCase() === name.toLowerCase() && l.rank === item.rank
+      );
+
+      next[idx] = {
+        ...item,
+        officerName: name,
+        id: matchedLeave ? matchedLeave.id : `no-leave-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 5)}`,
+      };
+      return next;
+    });
   };
 
   // Handlers for Departing Officers Leave Ledger (except Constable)
@@ -476,6 +523,14 @@ interface EnhancedCaseArrestItem {
         else if (matched.rank === 'Sub-Inspector (SI)') item.rank = 'Sub-Inspector (SI)';
         else item.rank = 'ASI & PTC';
       }
+    }
+
+    // Auto-select first matching officer if rank changes
+    if (field === 'rank') {
+      const filtered = nonConstableOfficers.filter((io) =>
+        doesOfficerRankMatchLeaveRank(io.rank, val)
+      );
+      item.officerName = filtered[0]?.name || '';
     }
 
     // Auto-recalculate arrival date if departureDate or daysOnLeave changes
@@ -1563,38 +1618,6 @@ interface EnhancedCaseArrestItem {
                         className="p-3.5 bg-amber-50/40 dark:bg-amber-950/20 rounded-xl border border-amber-200/80 dark:border-amber-900/60 space-y-3"
                       >
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
-                          {/* Officer Name */}
-                          <div className="sm:col-span-4">
-                            <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                              Select Departed Officer (Yesterday) *
-                            </label>
-                            {nonConstableOfficers.length > 0 ? (
-                              <select
-                                value={item.officerName}
-                                onChange={(e) => handleUpdateDepartingOfficer(idx, 'officerName', e.target.value)}
-                                className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-xs"
-                              >
-                                <option value="">Select Officer...</option>
-                                {nonConstableOfficers.map((io, idx) => (
-                                  <option key={io.id || `depart-io-${io.name}-${idx}`} value={io.name}>
-                                    {io.name} ({io.rank})
-                                  </option>
-                                ))}
-                                <option value={item.officerName && !nonConstableOfficers.some(o => o.name === item.officerName) ? item.officerName : 'Custom'}>
-                                  {item.officerName && !nonConstableOfficers.some(o => o.name === item.officerName) ? item.officerName : 'Other / Non-listed Officer'}
-                                </option>
-                              </select>
-                            ) : (
-                              <input
-                                type="text"
-                                placeholder="Enter Officer Name..."
-                                value={item.officerName}
-                                onChange={(e) => handleUpdateDepartingOfficer(idx, 'officerName', e.target.value)}
-                                className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-xs"
-                              />
-                            )}
-                          </div>
-
                           {/* Rank */}
                           <div className="sm:col-span-3">
                             <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -1611,6 +1634,43 @@ interface EnhancedCaseArrestItem {
                               <option value="Sub-Inspector (SI)">Sub-Inspector (SI)</option>
                               <option value="ASI & PTC">ASI & PTC</option>
                             </select>
+                          </div>
+
+                          {/* Officer Name */}
+                          <div className="sm:col-span-4">
+                            <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                              Select Departed Officer (Yesterday) *
+                            </label>
+                            {(() => {
+                              const filteredIOs = nonConstableOfficers.filter((io) =>
+                                doesOfficerRankMatchLeaveRank(io.rank, item.rank)
+                              );
+                              return filteredIOs.length > 0 ? (
+                                <select
+                                  value={item.officerName}
+                                  onChange={(e) => handleUpdateDepartingOfficer(idx, 'officerName', e.target.value)}
+                                  className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-xs"
+                                >
+                                  <option value="">Select Officer...</option>
+                                  {filteredIOs.map((io, fIdx) => (
+                                    <option key={io.id || `depart-io-${io.name}-${fIdx}`} value={io.name}>
+                                      {io.name} ({io.rank})
+                                    </option>
+                                  ))}
+                                  <option value={item.officerName && !filteredIOs.some(o => o.name === item.officerName) ? item.officerName : 'Custom'}>
+                                    {item.officerName && !filteredIOs.some(o => o.name === item.officerName) ? item.officerName : 'Other / Non-listed Officer'}
+                                  </option>
+                                </select>
+                              ) : (
+                                <input
+                                  type="text"
+                                  placeholder="Enter Officer Name..."
+                                  value={item.officerName}
+                                  onChange={(e) => handleUpdateDepartingOfficer(idx, 'officerName', e.target.value)}
+                                  className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-xs"
+                                />
+                              );
+                            })()}
                           </div>
 
                           {/* Departure Date */}
@@ -1746,26 +1806,62 @@ interface EnhancedCaseArrestItem {
                       className="p-3.5 bg-emerald-50/40 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/80 dark:border-emerald-900/60 space-y-3"
                     >
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
-                        {/* Select Leave Record */}
-                        <div className="sm:col-span-6">
+                        {/* Rank */}
+                        <div className="sm:col-span-3">
                           <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Select Rejoining Officer *
+                            Rank / Designation *
                           </label>
                           <select
-                            value={item.id}
-                            onChange={(e) => handleUpdateArrivedOfficer(item.id, 'id', e.target.value)}
+                            value={item.rank}
+                            onChange={(e) =>
+                              handleUpdateArrivedOfficerRank(idx, e.target.value as OfficerLeaveRank)
+                            }
                             className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-xs"
                           >
-                            {onLeaveOfficers.map((l) => (
-                              <option key={l.id} value={l.id}>
-                                {l.officerName} ({l.rank}) — Left on {formatIndianDate(l.departureDate)}
-                              </option>
-                            ))}
+                            <option value="Inspector">Inspector</option>
+                            <option value="Sub-Inspector (SI)">Sub-Inspector (SI)</option>
+                            <option value="ASI & PTC">ASI & PTC</option>
                           </select>
                         </div>
 
+                        {/* Select Rejoining Officer */}
+                        <div className="sm:col-span-4">
+                          <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Select Rejoining Officer *
+                          </label>
+                          {(() => {
+                            const filteredIOs = nonConstableOfficers.filter((io) =>
+                              doesOfficerRankMatchLeaveRank(io.rank, item.rank)
+                            );
+                            return (
+                              <select
+                                value={item.officerName}
+                                onChange={(e) => handleUpdateArrivedOfficerName(idx, e.target.value)}
+                                className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-xs"
+                              >
+                                <option value="">-- Choose Officer --</option>
+                                {filteredIOs.map((io) => {
+                                  const matchingLeave = onLeaveOfficers.find(
+                                    (l) => l.officerName.toLowerCase() === io.name.toLowerCase() && l.rank === item.rank
+                                  );
+                                  return (
+                                    <option key={io.id} value={io.name}>
+                                      {io.name} {matchingLeave ? `(ON LEAVE — Left on ${formatIndianDate(matchingLeave.departureDate)})` : '(Not on leave)'}
+                                    </option>
+                                  );
+                                })}
+                                {item.officerName && !filteredIOs.some(o => o.name === item.officerName) && (
+                                  <option value={item.officerName}>
+                                    {item.officerName} (Custom Entry)
+                                  </option>
+                                )}
+                              </select>
+                            );
+                          })()}
+                        </div>
+
                         {/* Actual Arrival Date */}
-                        <div className="sm:col-span-5">
+                        <div className="sm:col-span-4">
                           <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
                             Actual Arrival Date *
                           </label>
