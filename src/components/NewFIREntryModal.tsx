@@ -116,14 +116,14 @@ export const NewFIREntryModal: React.FC<NewFIREntryModalProps> = ({
 
   // Default Subdivision Resolution
   const defaultUserSubdivision = useMemo(() => {
-    if (isSubdivisionOfficer && currentUserAccount?.subdivision && currentUserAccount.subdivision !== 'ALL') {
+    if (currentUserAccount?.subdivision && currentUserAccount.subdivision !== 'ALL' && currentUserAccount.subdivision !== '') {
       return currentUserAccount.subdivision;
     }
     const matching = effectiveSubdivisions.filter(
       (s) => !s.districtName || s.districtName.toLowerCase() === defaultUserDistrict.toLowerCase()
     );
     return matching[0]?.name || effectiveSubdivisions[0]?.name || 'Tarapur';
-  }, [isSubdivisionOfficer, currentUserAccount, defaultUserDistrict, effectiveSubdivisions]);
+  }, [currentUserAccount, defaultUserDistrict, effectiveSubdivisions]);
 
   const activePS =
     isAdministrator || isDistrictOfficer || isSubdivisionOfficer
