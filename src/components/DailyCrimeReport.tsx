@@ -740,8 +740,8 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
                         <th className="py-1 text-center">Total</th>
                         <th className="py-1 text-center">Present</th>
                         <th className="py-1 text-center">On Leave</th>
-                        <th className="py-1 text-center">Arriving</th>
-                        <th className="py-1 text-center">Departing</th>
+                        <th className="py-1 text-center">Arrived Yesterday</th>
+                        <th className="py-1 text-center">Departed Yesterday</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
