@@ -11,6 +11,7 @@ import {
   PoliceDistrict,
   PoliceSubdivision,
   PoliceStation,
+  OfficialLetter,
 } from '../types';
 import { INITIAL_USER_ACCOUNTS } from '../data/mockData';
 
@@ -1539,6 +1540,134 @@ export async function deletePoliceStationFromSupabase(id: string): Promise<boole
   }
 }
 
+// --- OFFICIAL LETTERS & CORRESPONDENCE REGISTER ---
+export async function fetchOfficialLettersFromSupabase(): Promise<OfficialLetter[] | null> {
+  const client = getSupabase();
+  if (!isSupabaseConfigured() || !client) return null;
+  try {
+    const { data, error } = await client.from('official_letters').select('*');
+    if (error) {
+      console.warn('Error fetching official letters from Supabase:', error.message);
+      return null;
+    }
+    return (data || []).map((d: any) => ({
+      id: d.id,
+      source: d.source || '',
+      letterType: d.letter_type || d.letterType || '',
+      memoNo: d.memo_no || d.memoNo || '',
+      receivedDate: d.received_date || d.receivedDate || '',
+      replyDeadline: d.reply_deadline || d.replyDeadline || '',
+      complainantName: d.complainant_name || d.complainantName || '',
+      forwardedTo: Array.isArray(d.forwarded_to) ? d.forwarded_to : (Array.isArray(d.forwardedTo) ? d.forwardedTo : []),
+      isForwarded: d.is_forwarded || d.isForwarded || 'PENDING',
+      forwardedMemoNo: d.forwarded_memo_no || d.forwardedMemoNo,
+      forwardedDate: d.forwarded_date || d.forwardedDate,
+      replyByAssigned: d.reply_by_assigned || d.replyByAssigned || 'PENDING',
+      assignedReplies: typeof d.assigned_replies === 'string'
+        ? JSON.parse(d.assigned_replies)
+        : (d.assigned_replies || d.assignedReplies || undefined),
+      replyReceived: d.reply_received || d.replyReceived || 'PENDING',
+      replyReceivedDate: d.reply_received_date || d.replyReceivedDate,
+      replySentToSource: d.reply_sent_to_source || d.replySentToSource || 'PENDING',
+      sourceReplyMemoNo: d.source_reply_memo_no || d.sourceReplyMemoNo,
+      sourceReplyDate: d.source_reply_date || d.sourceReplyDate,
+      sourceReminders: typeof d.source_reminders === 'string'
+        ? JSON.parse(d.source_reminders)
+        : (d.source_reminders || d.sourceReminders || []),
+      forwardedReminders: typeof d.forwarded_reminders === 'string'
+        ? JSON.parse(d.forwarded_reminders)
+        : (d.forwarded_reminders || d.forwardedReminders || []),
+      createdByUnit: d.created_by_unit || d.createdByUnit || '',
+      createdByRole: d.created_by_role || d.createdByRole || '',
+      createdByUser: d.created_by_user || d.createdByUser || '',
+      district: d.district || '',
+      subdivision: d.subdivision || '',
+      policeStation: d.police_station || d.policeStation || '',
+    })) as OfficialLetter[];
+  } catch (err) {
+    console.warn('Supabase exception in fetchOfficialLetters:', err);
+    return null;
+  }
+}
+
+export async function saveOfficialLetterToSupabase(letter: OfficialLetter): Promise<boolean> {
+  const snakePayload = {
+    id: letter.id,
+    source: letter.source,
+    letter_type: letter.letterType,
+    memo_no: letter.memoNo,
+    received_date: letter.receivedDate,
+    reply_deadline: letter.replyDeadline,
+    complainant_name: letter.complainantName,
+    forwarded_to: letter.forwardedTo || [],
+    is_forwarded: letter.isForwarded,
+    forwarded_memo_no: letter.forwardedMemoNo || null,
+    forwarded_date: letter.forwardedDate || null,
+    reply_by_assigned: letter.replyByAssigned,
+    assigned_replies: letter.assignedReplies ? JSON.stringify(letter.assignedReplies) : null,
+    reply_received: letter.replyReceived,
+    reply_received_date: letter.replyReceivedDate || null,
+    reply_sent_to_source: letter.replySentToSource,
+    source_reply_memo_no: letter.sourceReplyMemoNo || null,
+    source_reply_date: letter.sourceReplyDate || null,
+    source_reminders: letter.sourceReminders ? JSON.stringify(letter.sourceReminders) : null,
+    forwarded_reminders: letter.forwardedReminders ? JSON.stringify(letter.forwardedReminders) : null,
+    created_by_unit: letter.createdByUnit,
+    created_by_role: letter.createdByRole,
+    created_by_user: letter.createdByUser,
+    district: letter.district,
+    subdivision: letter.subdivision,
+    police_station: letter.policeStation,
+  };
+
+  const camelPayload = {
+    id: letter.id,
+    source: letter.source,
+    letterType: letter.letterType,
+    memoNo: letter.memoNo,
+    receivedDate: letter.receivedDate,
+    replyDeadline: letter.replyDeadline,
+    complainantName: letter.complainantName,
+    forwardedTo: letter.forwardedTo || [],
+    isForwarded: letter.isForwarded,
+    forwardedMemoNo: letter.forwardedMemoNo || null,
+    forwardedDate: letter.forwardedDate || null,
+    replyByAssigned: letter.replyByAssigned,
+    assignedReplies: letter.assignedReplies || null,
+    replyReceived: letter.replyReceived,
+    replyReceivedDate: letter.replyReceivedDate || null,
+    replySentToSource: letter.replySentToSource,
+    sourceReplyMemoNo: letter.sourceReplyMemoNo || null,
+    sourceReplyDate: letter.sourceReplyDate || null,
+    sourceReminders: letter.sourceReminders || null,
+    forwardedReminders: letter.forwardedReminders || null,
+    createdByUnit: letter.createdByUnit,
+    createdByRole: letter.createdByRole,
+    createdByUser: letter.createdByUser,
+    district: letter.district,
+    subdivision: letter.subdivision,
+    policeStation: letter.policeStation,
+  };
+
+  return resilientUpsert('official_letters', snakePayload, camelPayload);
+}
+
+export async function deleteOfficialLetterFromSupabase(id: string): Promise<boolean> {
+  const client = getSupabase();
+  if (!isSupabaseConfigured() || !client) return false;
+  try {
+    const { error } = await client.from('official_letters').delete().eq('id', id);
+    if (error) {
+      console.error('Error deleting official letter from Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Supabase exception in deleteOfficialLetter:', err);
+    return false;
+  }
+}
+
 // --- SEED ALL LOCAL DATA TO SUPABASE ---
 export async function seedAllDataToSupabase(data: {
   userAccounts: UserAccount[];
@@ -1552,6 +1681,7 @@ export async function seedAllDataToSupabase(data: {
   districts?: PoliceDistrict[];
   subdivisions?: PoliceSubdivision[];
   policeStations?: PoliceStation[];
+  officialLetters?: OfficialLetter[];
 }): Promise<{ success: boolean; message: string; countSummary: Record<string, number> }> {
   if (!isSupabaseConfigured() || !getSupabase()) {
     return {
@@ -1573,6 +1703,7 @@ export async function seedAllDataToSupabase(data: {
     udCases: 0,
     dailyReports: 0,
     messages: 0,
+    officialLetters: 0,
   };
 
   try {
@@ -1617,6 +1748,11 @@ export async function seedAllDataToSupabase(data: {
     }
     for (const msg of data.messages) {
       if (await saveUserMessageToSupabase(msg)) counts.messages++;
+    }
+    if (data.officialLetters && data.officialLetters.length > 0) {
+      for (const letter of data.officialLetters) {
+        if (await saveOfficialLetterToSupabase(letter)) counts.officialLetters++;
+      }
     }
 
     return {
