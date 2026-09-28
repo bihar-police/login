@@ -530,3 +530,72 @@ export interface UserAuthSession {
   loginTime: string;
 }
 
+export interface LetterSource {
+  id: string;
+  name: string;
+  addedByUnit: string;
+  visibilityScope: 'PRIVATE' | 'SUBDIVISION' | 'DISTRICT' | 'PUBLIC';
+  addedByRole: string;
+  addedByUsername: string;
+}
+
+export interface LetterType {
+  id: string;
+  name: string;
+  addedByUnit: string;
+  visibilityScope: 'PRIVATE' | 'SUBDIVISION' | 'DISTRICT' | 'PUBLIC';
+  addedByRole: string;
+  addedByUsername: string;
+}
+
+export interface ReminderEntry {
+  reminderMemoNo: string;
+  reminderDate: string;
+}
+
+export interface OfficialLetter {
+  id: string;
+  source: string;              // SP Office, DM Office, Police HQ, etc.
+  letterType: string;          // CPGRAMS, SAHYOG, NHRC, BHRC, CWC, etc.
+  memoNo: string;              // Memo number of the incoming letter
+  receivedDate: string;        // Date of receiving
+  replyDeadline: string;       // Time frame / deadline to reply to source
+  complainantName: string;     // Name of the complainant (replaces subject matter)
+  
+  // Forwarding fields
+  forwardedTo: string[];       // List of units (e.g., ["Tarapur PS", "Asarganj PS"])
+  isForwarded: 'YES' | 'PENDING';
+  forwardedMemoNo?: string;
+  forwardedDate?: string;
+  
+  // Reply from Assigned Statuses
+  replyByAssigned: 'YES' | 'PENDING';
+  assignedReplies?: {
+    assignedUnit: string;      // e.g. "Tarapur PS"
+    replyMemoNo: string;
+    replyDate: string;
+    submittedAt: string;
+  }[];
+  
+  // Reply received by Supervisor Statuses
+  replyReceived: 'YES' | 'PENDING';
+  replyReceivedDate?: string;
+  
+  // Reply sent to the original source
+  replySentToSource: 'YES' | 'PENDING';
+  sourceReplyMemoNo?: string;
+  sourceReplyDate?: string;
+
+  // Reminders Tracking lists
+  sourceReminders?: ReminderEntry[];
+  forwardedReminders?: ReminderEntry[];
+
+  // Metadata for security context
+  createdByUnit: string;       // e.g. "Tarapur Subdivision HQ"
+  createdByRole: string;       // e.g. "SDPO"
+  createdByUser: string;       // e.g. "sdpo.tarapur"
+  district: string;            // e.g. "Munger"
+  subdivision: string;         // e.g. "Tarapur"
+  policeStation: string;       // e.g. "District HQ" or "Tarapur"
+}
+
