@@ -39,6 +39,7 @@ import {
   Info,
   UserMinus,
   ArrowRight,
+  UserCheck,
 } from 'lucide-react';
 import { calculateArrivalDate, formatIndianDate, normalizeLeaveType } from '../utils/helpers';
 
@@ -55,6 +56,7 @@ interface DailyReportSubmitModalProps {
   subdivisions?: PoliceSubdivision[];
   currentRole?: UserRole;
   currentUserAccount?: UserAccount | null;
+  leaveLedger?: LeaveLedgerEntry[];
 }
 
 const DEFAULT_RANKS: RankStrengthDetails['rank'][] = [
@@ -77,6 +79,7 @@ export const DailyReportSubmitModal: React.FC<DailyReportSubmitModalProps> = ({
   subdivisions,
   currentRole = 'ADMINISTRATOR',
   currentUserAccount = null,
+  leaveLedger = [],
 }) => {
   const { isAdministrator, isDistrictLevel, userDistrict, userSubdivision, isSubdivisionLevel } =
     getUserJurisdictionContext(currentRole, currentUserAccount);
@@ -155,6 +158,14 @@ interface EnhancedCaseArrestItem {
 
   // Departing Officers Leave Registry (Except Constable)
   const [departingOfficers, setDepartingOfficers] = useState<LeaveLedgerEntry[]>([]);
+
+  // Arrived Yesterday Officers Leave Registry (Except Constable)
+  const [arrivedOfficers, setArrivedOfficers] = useState<{
+    id: string;
+    officerName: string;
+    rank: OfficerLeaveRank;
+    actualArrivalDate: string;
+  }[]>([]);
 
   // 6. Seizures and Incidents
   const [seizuresSummary, setSeizuresSummary] = useState('');
@@ -341,13 +352,74 @@ interface EnhancedCaseArrestItem {
     );
   };
 
-  // Synchronize departing count in rankStrengths table
-  const syncRankDepartingCounts = (list: LeaveLedgerEntry[]) => {
+  // Synchronize departing and arriving counts in rankStrengths table
+  useEffect(() => {
     setRankStrengths((prev) =>
       prev.map((rs) => {
         if (rs.rank === 'Constable') return rs;
-        const count = list.filter((item) => item.rank === rs.rank).length;
-        return { ...rs, departingToday: count };
+        const departingCount = departingOfficers.filter((item) => item.rank === rs.rank).length;
+        const arrivedCount = arrivedOfficers.filter((item) => item.rank === rs.rank).length;
+        return {
+          ...rs,
+          departingToday: departingCount,
+          arrivingToday: arrivedCount,
+        };
+      })
+    );
+  }, [departingOfficers, arrivedOfficers]);
+
+  // Derived onLeaveOfficers list for this station
+  const onLeaveOfficers = useMemo(() => {
+    return leaveLedger.filter(
+      (entry) => entry.ps === ps && entry.status === 'ON_LEAVE'
+    );
+  }, [leaveLedger, ps]);
+
+  // Handlers for Arrived Officers (except Constable)
+  const handleAddArrivedOfficer = () => {
+    const reportDate = new Date(date);
+    reportDate.setDate(reportDate.getDate() - 1);
+    const yesterdayDateStr = reportDate.toISOString().split('T')[0];
+
+    const eligible = onLeaveOfficers.filter(
+      (l) => !arrivedOfficers.some((a) => a.id === l.id)
+    );
+    if (eligible.length === 0) {
+      alert("No officers currently registered on leave at this station.");
+      return;
+    }
+
+    const defaultLeave = eligible[0];
+    const newArrival = {
+      id: defaultLeave.id,
+      officerName: defaultLeave.officerName,
+      rank: defaultLeave.rank,
+      actualArrivalDate: yesterdayDateStr,
+    };
+    setArrivedOfficers((prev) => [...prev, newArrival]);
+  };
+
+  const handleRemoveArrivedOfficer = (id: string) => {
+    setArrivedOfficers((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleUpdateArrivedOfficer = (id: string, field: 'id' | 'actualArrivalDate', val: string) => {
+    setArrivedOfficers((prev) =>
+      prev.map((a) => {
+        if (a.id === id && field === 'id') {
+          const matchedLeave = onLeaveOfficers.find((l) => l.id === val);
+          if (matchedLeave) {
+            return {
+              ...a,
+              id: val,
+              officerName: matchedLeave.officerName,
+              rank: matchedLeave.rank,
+            };
+          }
+        } else if (a.id === id && field === 'actualArrivalDate') {
+          return { ...a, actualArrivalDate: val };
+        }
+        return a;
       })
     );
   };
@@ -358,30 +430,34 @@ interface EnhancedCaseArrestItem {
     const defaultRank: OfficerLeaveRank =
       (nonConstableOfficers[0]?.rank as OfficerLeaveRank) || 'Sub-Inspector (SI)';
     const defaultDays = 4;
-    const computedArrival = calculateArrivalDate(date, defaultDays);
-
+    
+    // Calculate yesterday relative to report date
+    const reportDate = new Date(date);
+    reportDate.setDate(reportDate.getDate() - 1);
+    const yesterdayDateStr = reportDate.toISOString().split('T')[0];
+    
+    const computedArrival = calculateArrivalDate(yesterdayDateStr, defaultDays);
+ 
     const newEntry: LeaveLedgerEntry = {
       id: `leave-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       ps,
       officerName: defaultOfficer,
       rank: defaultRank,
-      departureDate: date,
+      departureDate: yesterdayDateStr,
       daysOnLeave: defaultDays,
       arrivalDate: computedArrival,
       status: 'ON_LEAVE',
       leaveType: 'CL',
       remarks: '',
     };
-
+ 
     const updated = [...departingOfficers, newEntry];
     setDepartingOfficers(updated);
-    syncRankDepartingCounts(updated);
   };
 
   const handleRemoveDepartingOfficer = (index: number) => {
     const updated = departingOfficers.filter((_, i) => i !== index);
     setDepartingOfficers(updated);
-    syncRankDepartingCounts(updated);
   };
 
   const handleUpdateDepartingOfficer = (
@@ -411,7 +487,6 @@ interface EnhancedCaseArrestItem {
 
     updated[index] = item;
     setDepartingOfficers(updated);
-    syncRankDepartingCounts(updated);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -459,6 +534,7 @@ interface EnhancedCaseArrestItem {
       arrestDetails,
       rankStrengths,
       leaveLedgerEntries: departingOfficers.filter((o) => o.officerName.trim().length > 0),
+      arrivedYesterdayEntries: arrivedOfficers,
       seizuresSummary: seizuresSummary.trim() || undefined,
       majorIncidentsNotes: majorIncidentsNotes.trim() || undefined,
       submittedBy: submittedBy.trim() || `SHO ${ps} PS`,
@@ -1331,7 +1407,7 @@ interface EnhancedCaseArrestItem {
             <div className="p-2.5 bg-blue-50/80 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-900 flex items-start gap-2 text-blue-900 dark:text-blue-200 text-[11px]">
               <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
               <div>
-                <strong>Operational Rule:</strong> For Inspector, Sub-Inspector (SI), and ASI & PTC, officers who arrive or depart on leave today are considered <span className="underline decoration-blue-500 font-bold">Present for duty on that day</span>.
+                <strong>Operational Rule:</strong> For Inspector, Sub-Inspector (SI), and ASI & PTC, officers who arrived yesterday or departed yesterday are considered <span className="underline decoration-blue-500 font-bold">Present for duty on that day</span>.
               </div>
             </div>
 
@@ -1343,8 +1419,8 @@ interface EnhancedCaseArrestItem {
                     <th className="py-2 px-2 text-center">Sanctioned / Total</th>
                     <th className="py-2 px-2 text-center">Present</th>
                     <th className="py-2 px-2 text-center">On Leave</th>
-                    <th className="py-2 px-2 text-center">Arriving Today</th>
-                    <th className="py-2 px-2 text-center">Departing Today</th>
+                    <th className="py-2 px-2 text-center">Arrived Yesterday</th>
+                    <th className="py-2 px-2 text-center">Departed Yesterday</th>
                     <th className="py-2 px-2 text-center">Effective Present</th>
                   </tr>
                 </thead>
@@ -1449,14 +1525,14 @@ interface EnhancedCaseArrestItem {
                   <div>
                     <div className="flex items-center gap-2">
                       <h5 className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-xs">
-                        Departing Officers Leave Registry
+                        Departed Officers Leave Registry (Yesterday)
                       </h5>
                       <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 font-extrabold text-[10px] rounded border border-amber-300 dark:border-amber-800">
                         Except Constables
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Specify officer departing & days on leave. Arrival date is computed automatically (e.g. departed 01/01/2026 for 4 days = arrival on 06/01/2026).
+                      Specify officer who departed yesterday & days on leave. Expected return/arrival date is computed automatically (e.g. departed 01/01/2026 for 4 days = arrival on 06/01/2026).
                     </p>
                   </div>
                 </div>
@@ -1467,13 +1543,13 @@ interface EnhancedCaseArrestItem {
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-lg font-bold text-xs transition shadow-xs cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Departing Officer</span>
+                  <span>Add Departed Officer (Yesterday)</span>
                 </button>
               </div>
 
               {departingOfficers.length === 0 ? (
                 <div className="py-3 px-4 text-center text-slate-500 dark:text-slate-400 bg-slate-50/70 dark:bg-slate-800/30 rounded-lg border border-dashed border-slate-200 dark:border-slate-800 text-xs">
-                  No officers (Inspector, SI, ASI) departing on leave today. Click <strong className="text-slate-700 dark:text-slate-300">"Add Departing Officer"</strong> to log an officer leaving and compute their expected return date.
+                  No officers (Inspector, SI, ASI) departed on leave yesterday. Click <strong className="text-slate-700 dark:text-slate-300">"Add Departed Officer (Yesterday)"</strong> to log an officer leaving and compute their expected return date.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1490,7 +1566,7 @@ interface EnhancedCaseArrestItem {
                           {/* Officer Name */}
                           <div className="sm:col-span-4">
                             <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                              Select Departing Officer *
+                              Select Departed Officer (Yesterday) *
                             </label>
                             {nonConstableOfficers.length > 0 ? (
                               <select
@@ -1622,6 +1698,99 @@ interface EnhancedCaseArrestItem {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+
+            {/* Arrived Yesterday Officers Leave Registry (Except Constable) */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-lg border border-emerald-200/60 dark:border-emerald-900/60">
+                    <UserCheck className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h5 className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-xs">
+                        Arrived Yesterday From Leave Registry
+                      </h5>
+                      <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-300 font-extrabold text-[10px] rounded border border-emerald-300 dark:border-emerald-800">
+                        Except Constables
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Select currently on-leave officer who arrived yesterday from leave to resume normal duty status.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddArrivedOfficer}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg font-bold text-xs transition shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Arrived Officer</span>
+                </button>
+              </div>
+
+              {arrivedOfficers.length === 0 ? (
+                <div className="py-3 px-4 text-center text-slate-500 dark:text-slate-400 bg-slate-50/70 dark:bg-slate-800/30 rounded-lg border border-dashed border-slate-200 dark:border-slate-800 text-xs">
+                  No officers (Inspector, SI, ASI) marked as arrived yesterday from leave. Click <strong className="text-slate-700 dark:text-slate-300">"Add Arrived Officer"</strong> if any officers resumed duty.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {arrivedOfficers.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="p-3.5 bg-emerald-50/40 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/80 dark:border-emerald-900/60 space-y-3"
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                        {/* Select Leave Record */}
+                        <div className="sm:col-span-6">
+                          <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Select Rejoining Officer *
+                          </label>
+                          <select
+                            value={item.id}
+                            onChange={(e) => handleUpdateArrivedOfficer(item.id, 'id', e.target.value)}
+                            className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-xs"
+                          >
+                            {onLeaveOfficers.map((l) => (
+                              <option key={l.id} value={l.id}>
+                                {l.officerName} ({l.rank}) — Left on {formatIndianDate(l.departureDate)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Actual Arrival Date */}
+                        <div className="sm:col-span-5">
+                          <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Actual Arrival Date *
+                          </label>
+                          <input
+                            type="date"
+                            value={item.actualArrivalDate}
+                            onChange={(e) => handleUpdateArrivedOfficer(item.id, 'actualArrivalDate', e.target.value)}
+                            className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-xs"
+                          />
+                        </div>
+
+                        {/* Remove button */}
+                        <div className="sm:col-span-1 flex justify-end pb-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveArrivedOfficer(item.id)}
+                            className="p-2 text-rose-500 hover:bg-rose-100/60 dark:hover:bg-rose-950/60 rounded-lg transition"
+                            title="Remove Officer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
