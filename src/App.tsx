@@ -1982,6 +1982,14 @@ export default function App() {
           districts,
           subdivisions,
           policeStations,
+          officialLetters: (() => {
+            try {
+              const saved = localStorage.getItem('sdpo_official_letters');
+              return saved ? JSON.parse(saved) : [];
+            } catch {
+              return [];
+            }
+          })(),
         }}
       />
 
