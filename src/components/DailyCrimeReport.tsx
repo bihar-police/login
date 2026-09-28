@@ -597,6 +597,7 @@ export const DailyCrimeReportSection: React.FC<DailyCrimeReportProps> = ({
         subdivisions={subdivisions}
         currentRole={currentRole}
         currentUserAccount={currentUserAccount}
+        leaveLedger={leaveLedger}
       />
 
       {/* Modal 2: View Report Full Breakdown */}
