@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { FIRCase, UserRole, CaseDesignation, CrimeHead } from '../types';
 import { getDeadlineInfo, formatReadableDate } from '../utils/helpers';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
-import { CRIME_HEADS_CONFIG, classifyCrimeHead } from '../utils/crimeClassifier';
+import { CRIME_HEADS_CONFIG, classifyCrimeHead, getCaseCrimeHeads } from '../utils/crimeClassifier';
 import {
   Shield,
   ShieldAlert,
@@ -569,14 +569,28 @@ export const FIRTable: React.FC<FIRTableProps> = ({
                   {/* Sections & PO */}
                   <td className="py-3 px-4 max-w-xs">
                     {(() => {
-                      const head = (c.crimeHead as CrimeHead) || classifyCrimeHead(c);
-                      const meta = CRIME_HEADS_CONFIG[head] || CRIME_HEADS_CONFIG['Other / General IPC & BNS'];
+                      const allHeads = getCaseCrimeHeads(c);
+                      const displayHeads = allHeads.length > 0 ? allHeads : [classifyCrimeHead(c)];
                       return (
-                        <div className="mb-1">
-                          <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md ${meta.color.badgeBg} ${meta.color.badgeText}`}>
-                            <span>{meta.icon}</span>
-                            <span>{meta.name}</span>
-                          </span>
+                        <div className="mb-1 flex items-center gap-1 flex-wrap">
+                          {displayHeads.slice(0, 3).map((head) => {
+                            const meta = CRIME_HEADS_CONFIG[head] || CRIME_HEADS_CONFIG['Other / General IPC & BNS'];
+                            return (
+                              <span
+                                key={head}
+                                className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md ${meta.color.badgeBg} ${meta.color.badgeText}`}
+                                title={meta.name}
+                              >
+                                <span>{meta.icon}</span>
+                                <span>{meta.name}</span>
+                              </span>
+                            );
+                          })}
+                          {displayHeads.length > 3 && (
+                            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                              +{displayHeads.length - 3}
+                            </span>
+                          )}
                         </div>
                       );
                     })()}
