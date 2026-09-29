@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { FilterOptions, PoliceStationName, CaseDesignation, CaseStatus, InvestigatingOfficer, FIRCase, PoliceStation, CrimeHead, PoliceDistrict, PoliceSubdivision, UserRole, UserAccount } from '../types';
 import { INITIAL_POLICE_STATIONS } from '../data/mockData';
 import { JurisdictionFilterControls } from './JurisdictionFilterControls';
-import { Search, RotateCcw, Calendar, Check, ChevronDown, Download, FileSpreadsheet, Printer, FileCheck, X, CheckCircle2, ShieldAlert, Building2 } from 'lucide-react';
+import { Search, RotateCcw, Calendar, Check, ChevronDown, Download, FileSpreadsheet, Printer, FileCheck, X, CheckCircle2, ShieldAlert, Building2, Tag, Zap, CheckSquare, Square } from 'lucide-react';
 import { exportToExcel, exportToPDF } from '../utils/reportExport';
-import { CRIME_HEADS_CONFIG, ALL_CRIME_HEADS } from '../utils/crimeClassifier';
+import { CRIME_HEADS_CONFIG, ALL_CRIME_HEADS, getDynamicCrimeHeadsConfig, CrimeHeadMeta } from '../utils/crimeClassifier';
+import { getUserJurisdictionContext, getPoliceStationsForJurisdiction } from '../utils/jurisdictionHelpers';
 
 interface FIRFilterBarProps {
   filters: FilterOptions;
@@ -44,6 +45,8 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
   onSelectSubdivision,
 }) => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [crimeHeadSearch, setCrimeHeadSearch] = useState('');
+  const [psSearch, setPsSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns on outside click
@@ -79,10 +82,78 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
     onFilterChange({ ...filters, [key]: newArray });
   };
 
-  const allPSOptions: PoliceStationName[] =
-    availablePoliceStations && availablePoliceStations.length > 0
-      ? (Array.from(new Set(availablePoliceStations.map((p) => p.name))) as PoliceStationName[])
-      : (Array.from(new Set(INITIAL_POLICE_STATIONS.map((p) => p.name))) as PoliceStationName[]);
+  // Dynamic Statutory Crime Heads Configuration
+  const [statutoryConfig, setStatutoryConfig] = useState<Record<string, CrimeHeadMeta>>(() => getDynamicCrimeHeadsConfig());
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setStatutoryConfig(getDynamicCrimeHeadsConfig());
+    };
+    window.addEventListener('sdpo-statutory-matrix-updated', handleUpdate);
+    return () => window.removeEventListener('sdpo-statutory-matrix-updated', handleUpdate);
+  }, []);
+
+  const crimeHeadOptions = useMemo(() => {
+    return Object.values(statutoryConfig).map((meta) => ({
+      value: meta.name,
+      label: meta.name,
+      icon: meta.icon || '⚖️',
+      subtext: `${meta.hindiName ? meta.hindiName + ' • ' : ''}BNS / SLL: ${meta.bnsSections?.slice(0, 2).join(', ') || meta.sllProvisions?.slice(0, 1).join(', ') || '-'}`,
+    }));
+  }, [statutoryConfig]);
+
+  const filteredCrimeHeadOptions = useMemo(() => {
+    if (!crimeHeadSearch.trim()) return crimeHeadOptions;
+    const q = crimeHeadSearch.toLowerCase();
+    return crimeHeadOptions.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        (opt.subtext && opt.subtext.toLowerCase().includes(q))
+    );
+  }, [crimeHeadOptions, crimeHeadSearch]);
+
+  // Command Jurisdiction Scoping for Police Stations
+  const { isAdministrator, isDistrictLevel, isSubdivisionLevel, userDistrict, userSubdivision } =
+    getUserJurisdictionContext(currentRole, currentUserAccount);
+
+  const activeDistrict = isAdministrator ? selectedDistrict : userDistrict;
+  const activeSubdivision = isSubdivisionLevel
+    ? userSubdivision
+    : isDistrictLevel
+    ? selectedSubdivision
+    : isAdministrator
+    ? selectedSubdivision
+    : userSubdivision;
+
+  const scopedStations = useMemo(() => {
+    return getPoliceStationsForJurisdiction(activeDistrict, activeSubdivision, availablePoliceStations);
+  }, [activeDistrict, activeSubdivision, availablePoliceStations]);
+
+  const allPSOptions: PoliceStationName[] = useMemo(() => {
+    if (activePS) {
+      return [activePS];
+    }
+    const names = scopedStations.map((p) => p.name as PoliceStationName);
+    return Array.from(new Set(names));
+  }, [scopedStations, activePS]);
+
+  // Clean up selected police stations if jurisdiction (district / subdivision) changes
+  useEffect(() => {
+    if (policeStations.length > 0) {
+      const valid = policeStations.filter((psName) =>
+        allPSOptions.some((opt) => opt.toLowerCase().trim() === psName.toLowerCase().trim())
+      );
+      if (valid.length !== policeStations.length) {
+        handleChange('policeStations', valid);
+      }
+    }
+  }, [allPSOptions]);
+
+  const filteredPSOptions = useMemo(() => {
+    if (!psSearch.trim()) return allPSOptions;
+    const q = psSearch.toLowerCase();
+    return allPSOptions.filter((ps) => ps.toLowerCase().includes(q));
+  }, [allPSOptions, psSearch]);
   const allDesignationOptions: { label: string; value: CaseDesignation }[] = [
     { label: 'SR Cases (SDPO)', value: 'SR' },
     { label: 'NON-SR Cases (CI)', value: 'NON_SR' },
@@ -311,32 +382,63 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
             </button>
 
             {openDropdown === 'ps' && (
-              <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xl z-30 p-2 space-y-1">
-                <button
-                  type="button"
-                  onClick={() => handleChange('policeStations', [])}
-                  className="w-full text-left text-[11px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
-                >
-                  Clear Selection (All PS)
-                </button>
+              <div className="absolute top-full left-0 mt-1 w-56 max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 p-2 space-y-1">
+                {allPSOptions.length > 5 && (
+                  <div className="relative mb-1">
+                    <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={psSearch}
+                      onChange={(e) => setPsSearch(e.target.value)}
+                      placeholder="Search stations..."
+                      className="w-full pl-6 pr-2 py-1 text-[11px] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded"
+                    />
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-1">
+                  <button
+                    type="button"
+                    onClick={() => handleChange('policeStations', [])}
+                    className="text-left text-[11px] font-bold text-blue-600 dark:text-blue-400 py-1 hover:underline"
+                  >
+                    Clear (All {allPSOptions.length} PS)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChange('policeStations', allPSOptions)}
+                    className="text-right text-[11px] font-bold text-slate-500 hover:underline"
+                  >
+                    Select All
+                  </button>
+                </div>
                 <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
-                {allPSOptions.map((ps) => {
-                  const checked = policeStations.includes(ps);
-                  return (
-                    <label
-                      key={ps}
-                      className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleArrayItem('policeStations', policeStations, ps)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>{ps} PS</span>
-                    </label>
-                  );
-                })}
+                {filteredPSOptions.length === 0 ? (
+                  <div className="text-[11px] text-slate-400 p-2 text-center">No stations found</div>
+                ) : (
+                  filteredPSOptions.map((ps) => {
+                    const checked = policeStations.some((p) => p.toLowerCase().trim() === ps.toLowerCase().trim());
+                    return (
+                      <label
+                        key={ps}
+                        className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            const exists = policeStations.some((p) => p.toLowerCase().trim() === ps.toLowerCase().trim());
+                            const next = exists
+                              ? policeStations.filter((p) => p.toLowerCase().trim() !== ps.toLowerCase().trim())
+                              : [...policeStations, ps];
+                            handleChange('policeStations', next);
+                          }}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>{ps} PS</span>
+                      </label>
+                    );
+                  })
+                )}
               </div>
             )}
           </div>
@@ -505,7 +607,7 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
           )}
         </div>
 
-        {/* Multi-Select Crime Head */}
+        {/* Multi-Select Crime Head (Pro Interactive Selector identical to Generate Report Pro) */}
         <div className="relative">
           <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1">
             <ShieldAlert className="w-3 h-3 text-rose-500" />
@@ -519,41 +621,126 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
             <span className="truncate">
               {crimeHeads.length === 0
                 ? 'All Crime Heads'
-                : `${crimeHeads.length} Selected`}
+                : `${crimeHeads.length} Selected (${filters.crimeHeadMatchMode === 'ALL' ? 'AND' : 'OR'})`}
             </span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
           {openDropdown === 'crimeHead' && (
-            <div className="absolute top-full left-0 mt-1 w-64 max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xl z-30 p-2 space-y-1">
-              <button
-                type="button"
-                onClick={() => handleChange('crimeHeads', [])}
-                className="w-full text-left text-[11px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
-              >
-                Clear Selection (All Heads)
-              </button>
-              <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
-              {ALL_CRIME_HEADS.map((headId) => {
-                const meta = CRIME_HEADS_CONFIG[headId];
-                const checked = crimeHeads.includes(headId);
-                return (
-                  <label
-                    key={headId}
-                    className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded cursor-pointer"
+            <div className="absolute top-full left-0 mt-1 w-72 sm:w-80 max-h-80 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-30 p-2.5 space-y-2">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={crimeHeadSearch}
+                  onChange={(e) => setCrimeHeadSearch(e.target.value)}
+                  placeholder="Search crime heads (e.g. Murder, Arms, Loot)..."
+                  className="w-full pl-8 pr-7 py-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  autoFocus
+                />
+                {crimeHeadSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setCrimeHeadSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleArrayItem('crimeHeads', crimeHeads, headId)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="truncate">
-                      {meta.icon} {meta.name}
-                    </span>
-                  </label>
-                );
-              })}
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Match Mode Toggle & Quick Actions */}
+              <div className="flex items-center justify-between gap-1 text-[11px] pt-0.5">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleChange('crimeHeads', filteredCrimeHeadOptions.map((o) => o.value))}
+                    className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
+                  >
+                    Select All ({filteredCrimeHeadOptions.length})
+                  </button>
+                  <span className="text-slate-300 dark:text-slate-700">•</span>
+                  <button
+                    type="button"
+                    onClick={() => handleChange('crimeHeads', [])}
+                    className="text-rose-500 font-bold hover:underline"
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                {/* Match Mode (ANY vs ALL) */}
+                <div className="flex items-center rounded-md bg-slate-100 dark:bg-slate-800 p-0.5 text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => handleChange('crimeHeadMatchMode', 'ANY')}
+                    className={`px-1.5 py-0.5 rounded transition ${
+                      (filters.crimeHeadMatchMode || 'ANY') === 'ANY'
+                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs'
+                        : 'text-slate-500'
+                    }`}
+                    title="Match Any (OR) - Case matches if it has ANY of the selected crime heads"
+                  >
+                    OR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChange('crimeHeadMatchMode', 'ALL')}
+                    className={`px-1.5 py-0.5 rounded transition ${
+                      filters.crimeHeadMatchMode === 'ALL'
+                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-2xs'
+                        : 'text-slate-500'
+                    }`}
+                    title="Match All (AND) - Case must involve ALL selected crime heads together"
+                  >
+                    AND
+                  </button>
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
+
+              {/* Crime Heads List */}
+              <div className="max-h-52 overflow-y-auto space-y-1 divide-y divide-slate-50 dark:divide-slate-800/40">
+                {filteredCrimeHeadOptions.length === 0 ? (
+                  <div className="text-center py-4 text-xs text-slate-400">
+                    No crime heads found matching "{crimeHeadSearch}"
+                  </div>
+                ) : (
+                  filteredCrimeHeadOptions.map((opt) => {
+                    const checked = crimeHeads.includes(opt.value);
+                    return (
+                      <label
+                        key={opt.value}
+                        className={`flex items-start gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer transition select-none ${
+                          checked
+                            ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-200'
+                            : 'text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleArrayItem('crimeHeads', crimeHeads, opt.value)}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 font-bold truncate">
+                            <span>{opt.icon}</span>
+                            <span className="truncate">{opt.label}</span>
+                          </div>
+                          {opt.subtext && (
+                            <div className="text-[10px] text-slate-400 font-normal truncate">
+                              {opt.subtext}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -592,7 +779,7 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
           </select>
         </div>
 
-        {/* Multi-Select IO Filter */}
+        {/* Multi-Select IO Filter (Scoped to active Police Stations in Subdivision) */}
         <div className="relative">
           <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
             Officer / IO (Multi)
@@ -623,18 +810,18 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
               {(() => {
                 const availableIOs = investigatingOfficers.filter((io) => {
                   if (activePS) {
-                    return io.ps === activePS;
+                    return io.ps.toLowerCase() === activePS.toLowerCase();
                   }
                   if (policeStations.length > 0) {
-                    return policeStations.includes(io.ps as PoliceStationName);
+                    return policeStations.some((p) => p.toLowerCase() === io.ps.toLowerCase());
                   }
-                  return true;
+                  return allPSOptions.some((p) => p.toLowerCase() === io.ps.toLowerCase());
                 });
 
                 if (availableIOs.length === 0) {
                   return (
                     <div className="text-[11px] text-slate-400 p-2 italic text-center">
-                      No IOs registered for selected PS
+                      No IOs registered for selected jurisdiction
                     </div>
                   );
                 }
@@ -653,7 +840,7 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
                       <span className="truncate">
-                        {io.name} ({io.ps})
+                        {io.name} ({io.ps} PS)
                       </span>
                     </label>
                   );
@@ -664,6 +851,43 @@ export const FIRFilterBar: React.FC<FIRFilterBarProps> = ({
         </div>
 
       </div>
+
+      {/* Active Crime Heads Chips Bar */}
+      {crimeHeads.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+            <ShieldAlert className="w-3 h-3 text-rose-500" />
+            <span>Active Crime Heads ({crimeHeads.length}):</span>
+          </span>
+          {crimeHeads.map((head) => {
+            const meta = statutoryConfig[head] || CRIME_HEADS_CONFIG[head as CrimeHead];
+            return (
+              <span
+                key={head}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] shadow-2xs"
+              >
+                <span>{meta?.icon || '⚖️'}</span>
+                <span>{head}</span>
+                <button
+                  type="button"
+                  onClick={() => toggleArrayItem('crimeHeads', crimeHeads, head)}
+                  className="hover:text-rose-500 cursor-pointer ml-1"
+                  title="Remove this crime head filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => handleChange('crimeHeads', [])}
+            className="text-[11px] font-bold text-rose-500 hover:underline ml-1 cursor-pointer"
+          >
+            Clear All Heads
+          </button>
+        </div>
+      )}
 
       {/* Date Range Inputs: FIR Date Range & Chargesheet Date Range */}
       <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-4 pt-2.5 text-xs border-t border-slate-100 dark:border-slate-800">
