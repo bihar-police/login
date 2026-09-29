@@ -216,6 +216,15 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   const [ledgerYearFilter, setLedgerYearFilter] = useState<string>('ALL');
   const [ledgerSearch, setLedgerSearch] = useState('');
   const [ledgerPsFilter, setLedgerPsFilter] = useState<string>('ALL');
+
+  // Keep ledgerPsFilter in sync with activePS
+  useEffect(() => {
+    if (activePS) {
+      setLedgerPsFilter(activePS);
+    } else {
+      setLedgerPsFilter('ALL');
+    }
+  }, [activePS]);
   const [ioReviewCategoryFilter, setIoReviewCategoryFilter] = useState<
     'ALL' | 'UNDER_INV' | 'DISPOSED' | 'ARREST_PENDING' | 'FSL_PENDING' | 'VICTIM_PENDING' | 'SPECIAL_ACTS'
   >('ALL');
@@ -271,20 +280,35 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   const [addName, setAddName] = useState('');
   const [addRank, setAddRank] = useState<InvestigatingOfficer['rank']>('Sub-Inspector (SI)');
   const [addDistrict, setAddDistrict] = useState<string>(isAdministrator ? 'Munger' : userDistrict);
-  const [addSubdivision, setAddSubdivision] = useState<string>(isSubdivisionLevel ? userSubdivision : 'Tarapur');
+  const [addSubdivision, setAddSubdivision] = useState<string>(
+    isSubdivisionLevel
+      ? userSubdivision
+      : activePS
+      ? getSubdivisionForPS(activePS, availablePoliceStations)
+      : 'Tarapur'
+  );
   const [addPs, setAddPs] = useState<PoliceStationName | 'Subdivision HQ'>(activePS || 'Tarapur');
   const [addPhone, setAddPhone] = useState('');
 
-  const addDistrictVal = isAdministrator ? addDistrict : userDistrict;
-  const addSubdivisionVal = isSubdivisionLevel ? userSubdivision : addSubdivision;
+  const addDistrictVal = isAdministrator 
+    ? addDistrict 
+    : (activePS ? getDistrictForPS(activePS, availablePoliceStations) : userDistrict);
+
+  const addSubdivisionVal = isSubdivisionLevel 
+    ? userSubdivision 
+    : (activePS ? getSubdivisionForPS(activePS, availablePoliceStations) : addSubdivision);
 
   const availableAddSubdivisions = useMemo(() => {
     return getSubdivisionsForDistrict(addDistrictVal, subdivisions, districts);
   }, [addDistrictVal, subdivisions, districts]);
 
   const availableAddStations = useMemo(() => {
-    return getPoliceStationsForJurisdiction(addDistrictVal, addSubdivisionVal, availablePoliceStations);
-  }, [addDistrictVal, addSubdivisionVal, availablePoliceStations]);
+    const stations = getPoliceStationsForJurisdiction(addDistrictVal, addSubdivisionVal, availablePoliceStations);
+    if (activePS) {
+      return stations.filter((s) => s.name.toLowerCase() === activePS.toLowerCase());
+    }
+    return stations;
+  }, [addDistrictVal, addSubdivisionVal, availablePoliceStations, activePS]);
 
   // Keep addPs in sync with available options
   useEffect(() => {
@@ -356,9 +380,27 @@ export const IOManagement: React.FC<IOManagementProps> = ({
     });
 
     return Array.from(map.values())
-      .filter((item) => !localDeletedLeaveIds.includes(item.id))
+      .filter((item) => {
+        if (localDeletedLeaveIds.includes(item.id)) return false;
+        
+        // Scope filters
+        if (isAdministrator) return true;
+        if (isDistrictLevel) {
+          const dist = item.district || getDistrictForPS(item.ps, availablePoliceStations);
+          return dist.toLowerCase() === userDistrict.toLowerCase();
+        }
+        if (isSubdivisionLevel) {
+          const subdiv = item.subdivision || getSubdivisionForPS(item.ps, availablePoliceStations);
+          return subdiv.toLowerCase() === userSubdivision.toLowerCase();
+        }
+        if (isPSLevel) {
+          const myPs = currentUserAccount?.policeStation || activePS;
+          return myPs && item.ps.toLowerCase() === myPs.toLowerCase();
+        }
+        return true;
+      })
       .sort((a, b) => (b.departureDate || '').localeCompare(a.departureDate || ''));
-  }, [leaveLedger, dailyReports, localDeletedLeaveIds]);
+  }, [leaveLedger, dailyReports, localDeletedLeaveIds, isAdministrator, isDistrictLevel, isSubdivisionLevel, isPSLevel, userDistrict, userSubdivision, currentUserAccount, activePS, availablePoliceStations]);
 
   // Match officer names safely
   const matchOfficerName = (ioName: string, leaveOfficerName: string) => {
@@ -743,10 +785,13 @@ export const IOManagement: React.FC<IOManagementProps> = ({
     });
   }, [availablePoliceStations, isAdministrator, isDistrictLevel, isSubdivisionLevel, isPSLevel, userDistrict, userSubdivision, currentUserAccount, activePS]);
 
-  const stationOptions = [
-    { label: 'Subdivision HQ', value: 'Subdivision HQ' },
-    ...filteredPoliceStations.map((p) => ({ label: `${p.name} PS`, value: p.name })),
-  ];
+  const stationOptions = useMemo(() => {
+    const list = filteredPoliceStations.map((p) => ({ label: `${p.name} PS`, value: p.name }));
+    if (isAdministrator || isDistrictLevel || isSubdivisionLevel) {
+      return [{ label: 'Subdivision HQ', value: 'Subdivision HQ' }, ...list];
+    }
+    return list;
+  }, [filteredPoliceStations, isAdministrator, isDistrictLevel, isSubdivisionLevel]);
 
   const statusOptions = [
     { label: '🟢 Active (Posted)', value: 'ACTIVE' },
@@ -2025,9 +2070,10 @@ export const IOManagement: React.FC<IOManagementProps> = ({
               <select
                 value={ledgerPsFilter}
                 onChange={(e) => setLedgerPsFilter(e.target.value)}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs p-1.5 font-bold text-slate-800 dark:text-slate-200 cursor-pointer"
+                disabled={Boolean(activePS)}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs p-1.5 font-bold text-slate-800 dark:text-slate-200 cursor-pointer disabled:opacity-75"
               >
-                <option value="ALL">All Stations</option>
+                {!activePS && <option value="ALL">All Stations</option>}
                 {stationOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -3879,7 +3925,8 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                   <select
                     value={editPs}
                     onChange={(e) => setEditPs(e.target.value as any)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white"
+                    disabled={Boolean(activePS)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white disabled:opacity-75"
                   >
                     {stationOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -4146,7 +4193,8 @@ export const IOManagement: React.FC<IOManagementProps> = ({
                 <select
                   value={newLeavePs}
                   onChange={(e) => setNewLeavePs(e.target.value as any)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white"
+                  disabled={Boolean(activePS)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 font-semibold text-slate-900 dark:text-white disabled:opacity-75"
                 >
                   {stationOptions
                     .filter((opt) => opt.value !== 'Subdivision HQ')
