@@ -431,6 +431,7 @@ export interface FilterOptions {
   designations: CaseDesignation[];     // Empty array means ALL
   deadlineStatus: 'ALL' | 'ON_TRACK' | 'APPROACHING' | 'OVERDUE' | 'COMPLETED';
   crimeHeads?: string[];               // Empty array means ALL crime heads
+  crimeHeadMatchMode?: 'ANY' | 'ALL';  // Multi-crime matching logic (default: ANY / OR)
   statuses: CaseStatus[];               // Empty array means ALL (Under Investigation, Disposed)
   chargesheetedFilter?: 'ALL' | 'YES' | 'NO'; // Filter: Chargesheeted / Final Form Submitted / Mistake of Fact (ALL / YES / NO)
   cctnsSyncFilter: CCTNSSyncOption;
