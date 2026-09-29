@@ -165,7 +165,6 @@ export const JurisdictionFilterControls: React.FC<JurisdictionFilterControlsProp
             title="Filter by Police Station"
           >
             {includeAllOption && <option value="ALL">All Police Stations</option>}
-            <option value="Subdivision HQ">Subdivision HQ</option>
             {availableStations.map((ps, idx) => (
               <option key={ps.id || `${ps.name}-${idx}`} value={ps.name}>
                 {ps.name} PS
