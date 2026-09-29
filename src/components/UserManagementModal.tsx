@@ -9,6 +9,7 @@ import {
   PoliceStation,
 } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { getDistrictForPS, getSubdivisionForPS } from '../utils/jurisdictionHelpers';
 import {
   Shield,
   User,
@@ -160,11 +161,14 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       if (accRole === 'SP' || accRole === 'DISTRICT_ADMIN' || a.policeStation === 'District HQ') {
         return false;
       }
-      const matchesDistrict = Boolean(accDistrict && accDistrict.toLowerCase() === userDistrict.toLowerCase());
+      const effectiveDistrict = accDistrict || getDistrictForPS(a.policeStation, policeStations);
+      const effectiveSubdivision = accSubdivision || getSubdivisionForPS(a.policeStation, policeStations);
+
+      const matchesDistrict = Boolean(effectiveDistrict && effectiveDistrict.toLowerCase() === userDistrict.toLowerCase());
       const matchesSubdivision = Boolean(
-        accSubdivision &&
-        accSubdivision.toUpperCase() !== 'ALL' &&
-        accSubdivision.toLowerCase() === userSubdivision.toLowerCase()
+        effectiveSubdivision &&
+        effectiveSubdivision.toUpperCase() !== 'ALL' &&
+        effectiveSubdivision.toLowerCase() === userSubdivision.toLowerCase()
       );
 
       return matchesDistrict && matchesSubdivision;
@@ -277,6 +281,17 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       return;
     }
 
+    let targetDistrict = isAdministrator ? editDistrict : (acc.district || userDistrict);
+    let targetSubdivision = isAdministrator || isDistrictOfficer ? editSubdivision : (acc.subdivision || userSubdivision);
+    const targetPS = canAddUser ? editPS : acc.policeStation;
+
+    if (targetPS !== 'District HQ' && targetPS !== 'Subdivision HQ') {
+      const resolvedSubdiv = getSubdivisionForPS(targetPS, policeStations);
+      const resolvedDist = getDistrictForPS(targetPS, policeStations);
+      if (resolvedSubdiv) targetSubdivision = resolvedSubdiv;
+      if (resolvedDist) targetDistrict = resolvedDist;
+    }
+
     const updated: UserAccount = {
       ...acc,
       userId: editUserId.trim(),
@@ -285,9 +300,9 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       rank: editRank.trim() || acc.rank,
       role: canAddUser ? editRole : acc.role,
       permissionLevel: canAddUser ? editPermissionLevel : acc.permissionLevel,
-      district: isAdministrator ? editDistrict : (acc.district || userDistrict),
-      subdivision: isAdministrator || isDistrictOfficer ? editSubdivision : (acc.subdivision || userSubdivision),
-      policeStation: canAddUser ? editPS : acc.policeStation,
+      district: targetDistrict,
+      subdivision: targetSubdivision,
+      policeStation: targetPS,
     };
 
     onUpdateAccount(updated);
@@ -316,8 +331,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       return;
     }
 
-    const targetDistrict = isAdministrator ? newDistrict : userDistrict;
-    const targetSubdivision = isAdministrator
+    let targetDistrict = isAdministrator ? newDistrict : userDistrict;
+    let targetSubdivision = isAdministrator
       ? (newRole === 'SP' || newRole === 'DISTRICT_ADMIN' ? '' : newSubdivision)
       : isDistrictOfficer
       ? (newRole === 'SP' || newRole === 'DISTRICT_ADMIN' ? '' : newSubdivision)
@@ -329,6 +344,13 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         : newRole === 'SDPO' || newRole === 'CI'
         ? 'Subdivision HQ'
         : newPS;
+
+    if (targetPS !== 'District HQ' && targetPS !== 'Subdivision HQ') {
+      const resolvedSubdiv = getSubdivisionForPS(targetPS, policeStations);
+      const resolvedDist = getDistrictForPS(targetPS, policeStations);
+      if (resolvedSubdiv) targetSubdivision = resolvedSubdiv;
+      if (resolvedDist) targetDistrict = resolvedDist;
+    }
 
     const created: UserAccount = {
       id: `user-${Date.now()}`,
