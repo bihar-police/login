@@ -33,7 +33,10 @@ import {
 import {
   getSubdivisionForPS,
   getDistrictForPS,
+  getPoliceStationsForJurisdiction,
+  normalizeSubdivisionName,
 } from '../utils/jurisdictionHelpers';
+import { JurisdictionFilterControls } from './JurisdictionFilterControls';
 import { exportToExcel, generateDirectPDF } from '../utils/reportExport';
 import {
   FileSpreadsheet,
@@ -426,6 +429,9 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
   const userDistrict = currentUserAccount?.district || 'Munger';
   const userSubdivision = currentUserAccount?.subdivision || 'Tarapur';
 
+  const [reportDistrict, setReportDistrict] = useState<string>(isAdministrator ? 'ALL' : userDistrict);
+  const [reportSubdivision, setReportSubdivision] = useState<string>(isSubdivisionLevel ? userSubdivision : 'ALL');
+
   const activeRolePS = getPSFromRole(currentRole) || (
     !isAdministrator && !isDistrictLevel && !isSubdivisionLevel && currentUserAccount?.policeStation &&
     currentUserAccount.policeStation !== 'District HQ' && currentUserAccount.policeStation !== 'Subdivision HQ' && currentUserAccount.policeStation !== 'State Police HQ'
@@ -436,7 +442,7 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
   const isPSLevel = Boolean(activeRolePS);
 
   // -------------------------------------------------------------------------
-  // 0.1 BASE SCOPED CASES STRICTLY GOVERNED BY LOGIN LEVEL
+  // 0.1 BASE SCOPED CASES STRICTLY GOVERNED BY LOGIN LEVEL & SELECTED JURISDICTION
   // -------------------------------------------------------------------------
   const baseScopedCases = useMemo(() => {
     return cases.filter((c) => {
@@ -448,22 +454,35 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
       // 2. Subdivisional Level Lock
       if (isSubdivisionLevel) {
         const cSubdiv = c.subdivision || getSubdivisionForPS(c.ps, availablePoliceStations);
-        return cSubdiv.toLowerCase() === userSubdivision.toLowerCase();
+        return normalizeSubdivisionName(cSubdiv) === normalizeSubdivisionName(userSubdivision);
       }
 
       // 3. District Level Lock
       if (isDistrictLevel) {
         const cDist = c.district || getDistrictForPS(c.ps, availablePoliceStations);
-        return cDist.toLowerCase() === userDistrict.toLowerCase();
+        if (cDist.toLowerCase() !== userDistrict.toLowerCase()) return false;
+        if (reportSubdivision && reportSubdivision !== 'ALL') {
+          const cSubdiv = c.subdivision || getSubdivisionForPS(c.ps, availablePoliceStations);
+          if (normalizeSubdivisionName(cSubdiv) !== normalizeSubdivisionName(reportSubdivision)) return false;
+        }
+        return true;
       }
 
       // 4. Administrator Level
+      if (reportDistrict && reportDistrict !== 'ALL') {
+        const cDist = c.district || getDistrictForPS(c.ps, availablePoliceStations);
+        if (cDist.toLowerCase() !== reportDistrict.toLowerCase()) return false;
+      }
+      if (reportSubdivision && reportSubdivision !== 'ALL') {
+        const cSubdiv = c.subdivision || getSubdivisionForPS(c.ps, availablePoliceStations);
+        if (normalizeSubdivisionName(cSubdiv) !== normalizeSubdivisionName(reportSubdivision)) return false;
+      }
       return true;
     });
-  }, [cases, isPSLevel, activeRolePS, isSubdivisionLevel, userSubdivision, isDistrictLevel, userDistrict, availablePoliceStations]);
+  }, [cases, isPSLevel, activeRolePS, isSubdivisionLevel, userSubdivision, isDistrictLevel, userDistrict, isAdministrator, reportDistrict, reportSubdivision, availablePoliceStations]);
 
   // -------------------------------------------------------------------------
-  // 0.2 SCOPED POLICE STATIONS GOVERNED BY LOGIN LEVEL
+  // 0.2 SCOPED POLICE STATIONS GOVERNED BY LOGIN LEVEL & SELECTED JURISDICTION
   // -------------------------------------------------------------------------
   const effectiveScopedPSs = useMemo(() => {
     if (isPSLevel && activeRolePS) {
@@ -471,23 +490,22 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
       if (found) return [found];
       return [{ id: `ps-${activeRolePS}`, name: activeRolePS, subdivisionName: userSubdivision, districtName: userDistrict }];
     }
-    if (isSubdivisionLevel) {
-      const list = (availablePoliceStations && availablePoliceStations.length > 0 ? availablePoliceStations : INITIAL_POLICE_STATIONS).filter(
-        (p) => (p.subdivisionName || getSubdivisionForPS(p.name)).toLowerCase() === userSubdivision.toLowerCase()
+    const targetDist = isAdministrator ? reportDistrict : userDistrict;
+    const targetSubdiv = isSubdivisionLevel ? userSubdivision : reportSubdivision;
+    return getPoliceStationsForJurisdiction(targetDist, targetSubdiv, availablePoliceStations);
+  }, [availablePoliceStations, isPSLevel, activeRolePS, isSubdivisionLevel, userSubdivision, isDistrictLevel, userDistrict, isAdministrator, reportDistrict, reportSubdivision]);
+
+  // Clean up selected police stations if jurisdiction (district / subdivision) changes
+  useEffect(() => {
+    if (selectedPSs.length > 0) {
+      const valid = selectedPSs.filter((ps) =>
+        effectiveScopedPSs.some((p) => p.name.toLowerCase() === ps.toLowerCase())
       );
-      return list;
+      if (valid.length !== selectedPSs.length) {
+        setSelectedPSs(valid);
+      }
     }
-    if (isDistrictLevel) {
-      const list = (availablePoliceStations && availablePoliceStations.length > 0 ? availablePoliceStations : INITIAL_POLICE_STATIONS).filter(
-        (p) => (p.districtName || getDistrictForPS(p.name)).toLowerCase() === userDistrict.toLowerCase()
-      );
-      return list;
-    }
-    if (availablePoliceStations && availablePoliceStations.length > 0) {
-      return availablePoliceStations;
-    }
-    return INITIAL_POLICE_STATIONS;
-  }, [availablePoliceStations, isPSLevel, activeRolePS, isSubdivisionLevel, userSubdivision, isDistrictLevel, userDistrict]);
+  }, [effectiveScopedPSs]);
 
   // -------------------------------------------------------------------------
   // 1. DYNAMIC STATUTORY CONFIG STATE
@@ -1239,6 +1257,39 @@ export const CustomReportGenerator: React.FC<CustomReportGeneratorProps> = ({
               ({baseScopedCases.length} eligible cases in your jurisdiction)
             </span>
           </div>
+
+          {/* Jurisdiction Command Controls */}
+          {(isAdministrator || isDistrictLevel) && (
+            <div className="mt-3 p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 flex items-center gap-2 flex-wrap text-xs">
+              <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 shrink-0">
+                <Building2 className="w-4 h-4 text-indigo-500" />
+                <span>Report Jurisdiction:</span>
+              </span>
+              <JurisdictionFilterControls
+                currentRole={currentRole}
+                currentUserAccount={currentUserAccount}
+                districts={districts}
+                subdivisions={subdivisions}
+                availablePoliceStations={availablePoliceStations}
+                selectedDistrict={reportDistrict}
+                selectedSubdivision={reportSubdivision}
+                selectedPS="ALL"
+                onChangeDistrict={(d) => {
+                  setReportDistrict(d);
+                  setSelectedPSs([]);
+                }}
+                onChangeSubdivision={(s) => {
+                  setReportSubdivision(s);
+                  setSelectedPSs([]);
+                }}
+                onChangePS={(ps) => {
+                  if (ps !== 'ALL') setSelectedPSs([ps]);
+                  else setSelectedPSs([]);
+                }}
+                compact={true}
+              />
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}
