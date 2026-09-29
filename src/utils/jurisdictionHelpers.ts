@@ -16,30 +16,60 @@ export function getEffectivePoliceStations(policeStations?: PoliceStation[]): Po
   return INITIAL_POLICE_STATIONS;
 }
 
+export function normalizeSubdivisionName(name?: string): string {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s*(subdivision|subdiv)\s*$/gi, '')
+    .trim();
+}
+
 export function getDistrictForPS(psName?: string, policeStations?: PoliceStation[]): string {
   if (!psName) return 'Munger';
   const stations = getEffectivePoliceStations(policeStations);
-  const found = stations.find((p) => p.name.toLowerCase() === psName.toLowerCase());
+  const clean = psName.toLowerCase().trim().replace(/\s+ps$/, '');
+  const found = stations.find((p) => {
+    const pName = p.name.toLowerCase().trim().replace(/\s+ps$/, '');
+    return pName === clean || p.name.toLowerCase() === clean;
+  });
   if (found?.districtName) return found.districtName;
-  const lower = psName.toLowerCase();
-  if (['kotwali bhagalpur', 'ishakchak', 'babarganj', 'bhagalpur sadar', 'kahalgaon', 'sanokhar'].includes(lower)) {
+  if (['kotwali bhagalpur', 'ishakchak', 'babarganj', 'bhagalpur sadar', 'tatarpur', 'kahalgaon', 'sanokhar'].includes(clean)) {
     return 'Bhagalpur';
   }
   return 'Munger';
 }
 
 export function getSubdivisionForPS(psName?: string, policeStations?: PoliceStation[]): string {
-  if (!psName) return 'Tarapur';
+  if (!psName) return '';
+  const clean = psName.toLowerCase().trim().replace(/\s+ps$/, '');
+  
+  // 1. Check current passed policeStations
   const stations = getEffectivePoliceStations(policeStations);
-  const found = stations.find((p) => p.name.toLowerCase() === psName.toLowerCase());
-  if (found?.subdivisionName) return found.subdivisionName;
-  const lower = psName.toLowerCase();
-  if (['tarapur', 'asarganj', 'sangrampur', 'harpur'].includes(lower)) return 'Tarapur';
-  if (['munger kotwali', 'kotwali', 'kasim bazar', 'purabsarai', 'mufassil', 'muffasil', 'nayaramnagar', 'safiasarai'].includes(lower)) return 'Munger Sadar';
-  if (['kharagpur', 'shamshabad', 'tetiyabambar', 'gangta'].includes(lower)) return 'Kharagpur';
-  if (['bhagalpur sadar', 'kotwali bhagalpur', 'ishakchak', 'babarganj'].includes(lower)) return 'Bhagalpur Sadar';
-  if (['kahalgaon', 'sanokhar'].includes(lower)) return 'Kahalgaon';
-  return 'Tarapur';
+  const found = stations.find((p) => {
+    const pName = p.name.toLowerCase().trim().replace(/\s+ps$/, '');
+    return pName === clean || p.name.toLowerCase() === clean;
+  });
+  if (found?.subdivisionName && found.subdivisionName.trim()) {
+    return found.subdivisionName;
+  }
+
+  // 2. Also check INITIAL_POLICE_STATIONS as fallback
+  const initFound = INITIAL_POLICE_STATIONS.find((p) => {
+    const pName = p.name.toLowerCase().trim().replace(/\s+ps$/, '');
+    return pName === clean || p.name.toLowerCase() === clean;
+  });
+  if (initFound?.subdivisionName) {
+    return initFound.subdivisionName;
+  }
+
+  // 3. Known Bihar Police Station Mappings
+  if (['tarapur', 'asarganj', 'sangrampur', 'harpur'].includes(clean)) return 'Tarapur';
+  if (['munger kotwali', 'kotwali', 'kasim bazar', 'kasimbazar', 'purabsarai', 'mufassil', 'mufassil munger', 'muffasil', 'nayaramnagar', 'naya ramnagar', 'safiasarai'].includes(clean)) return 'Munger Sadar';
+  if (['kharagpur', 'haveli kharagpur', 'havelikharagpur', 'shamshabad', 'tetiyabambar', 'tetiabambar', 'gangta'].includes(clean)) return 'Kharagpur';
+  if (['bhagalpur sadar', 'kotwali bhagalpur', 'ishakchak', 'babarganj', 'tatarpur'].includes(clean)) return 'Bhagalpur Sadar';
+  if (['kahalgaon', 'sanokhar'].includes(clean)) return 'Kahalgaon';
+  return '';
 }
 
 /**
@@ -68,6 +98,7 @@ export function getSubdivisionsForDistrict(
 
 /**
  * Filter police stations based on district and subdivision.
+ * Strictly scopes stations to their designated subdivision without cross-subdivision leakage.
  */
 export function getPoliceStationsForJurisdiction(
   districtName: string,
@@ -82,7 +113,11 @@ export function getPoliceStationsForJurisdiction(
     }
     if (subdivisionName && subdivisionName !== 'ALL') {
       const psSubdiv = ps.subdivisionName || getSubdivisionForPS(ps.name, allStations);
-      if (psSubdiv.toLowerCase() !== subdivisionName.toLowerCase()) return false;
+      const cleanSubdiv = normalizeSubdivisionName(subdivisionName);
+      const cleanPsSubdiv = normalizeSubdivisionName(psSubdiv);
+      if (!cleanPsSubdiv || cleanPsSubdiv !== cleanSubdiv) {
+        return false;
+      }
     }
     return true;
   });
@@ -109,12 +144,17 @@ export function matchesJurisdictionFilter(
   // Subdivision Match
   if (subdivisionFilter && subdivisionFilter !== 'ALL') {
     const itemSubdiv = item.subdivision || getSubdivisionForPS(item.ps, stations);
-    if (itemSubdiv.toLowerCase() !== subdivisionFilter.toLowerCase()) return false;
+    const cleanSubdiv = normalizeSubdivisionName(subdivisionFilter);
+    const cleanItemSubdiv = normalizeSubdivisionName(itemSubdiv);
+    if (!cleanItemSubdiv || cleanItemSubdiv !== cleanSubdiv) return false;
   }
 
   // Police Station Match
   if (psFilter && psFilter !== 'ALL') {
-    if (!item.ps || item.ps.toLowerCase() !== psFilter.toLowerCase()) return false;
+    if (!item.ps) return false;
+    const cleanFilterPS = psFilter.toLowerCase().trim().replace(/\s+ps$/, '');
+    const cleanItemPS = item.ps.toLowerCase().trim().replace(/\s+ps$/, '');
+    if (cleanFilterPS !== cleanItemPS) return false;
   }
 
   return true;
