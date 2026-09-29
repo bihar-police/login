@@ -1184,6 +1184,60 @@ export function getCaseSearchableText(c: Partial<FIRCase>): string {
 }
 
 /**
+ * Canonical alias resolver for standard Bihar Crime Heads
+ * Resolves common synonyms and variations (e.g. 'Arms Act Offence' -> 'Arms Act', 'Rape & POCSO' -> 'POCSO Act')
+ */
+export function canonicalizeCrimeHead(name: string): string {
+  if (!name) return '';
+  const clean = name.toLowerCase().trim();
+
+  // 1. Violent Offences
+  if (clean.includes('attempt to murder') || clean.includes('307') || clean.includes('109 bns')) return 'Attempt to Murder';
+  if (clean === 'murder' || clean.includes('sec 302') || clean.includes('103(1)') || clean === 'hatya') return 'Murder';
+  if (clean.includes('mob lynch')) return 'Mob Lynching';
+  if (clean.includes('culpable homicide') || clean.includes('304 ipc') || clean.includes('105 bns')) return 'Culpable Homicide';
+
+  // 2. Property & Gang Offences
+  if (clean === 'dacoity' || clean.includes('dacoity')) return 'Dacoity';
+  if (clean.includes('robbery') || clean.includes('loot')) return 'Robbery / Loot';
+  if (clean.includes('extortion') || clean.includes('rangdari')) return 'Extortion / Rangdari';
+  if (clean.includes('snatch')) return 'Snatching';
+  if (clean.includes('burglary') || clean.includes('house-breaking') || clean.includes('sendhmari')) return 'Nocturnal Burglary / House-Breaking';
+  if (clean.includes('stolen property') || clean.includes('411 ipc')) return 'Stolen Property';
+  if (clean === 'theft' || clean.includes('theft') || clean.includes('chori')) return 'Theft';
+
+  // 3. Women & Child Offences
+  if (clean.includes('pocso') || clean.includes('rape & pocso')) return 'POCSO Act';
+  if (clean === 'rape' || clean.includes('balatkar') || clean.includes('376') || clean.includes('64 bns')) return 'Rape';
+  if (clean.includes('dowry death') || clean.includes('304b') || clean.includes('80 bns')) return 'Dowry Death';
+  if (clean.includes('sec 69 bns') || clean.includes('sexual deceit')) return 'Sec 69 BNS (Sexual Deceit)';
+  if (clean.includes('molestation') || clean.includes('outraging modesty') || clean.includes('354') || clean.includes('74 bns')) return 'Molestation / Outraging Modesty';
+  if (clean.includes('cruelty') || clean.includes('498a') || clean.includes('85 bns')) return 'Cruelty by Husband (85 BNS / 498A)';
+  if (clean.includes('dowry prohibition')) return 'Dowry Prohibition Act';
+
+  // 4. Special & Local Laws (SLL)
+  if (clean.includes('arms')) return 'Arms Act';
+  if (clean.includes('prohibition') || clean.includes('liquor') || clean.includes('sharab') || clean.includes('excise')) return 'Bihar Prohibition & Excise Act (Liquor)';
+  if (clean.includes('sc/st') || clean.includes('sc / st') || clean.includes('atrocity')) return 'SC/ST Act';
+  if (clean.includes('ndps') || clean.includes('narcotics') || clean.includes('charas') || clean.includes('ganja')) return 'NDPS Act';
+  if (clean.includes('mining') || clean.includes('khanan') || clean.includes('mmdr') || clean.includes('balu')) return 'Awaidh Khanan (Illegal Mining)';
+  if (clean.includes('explosive')) return 'Explosive Substances Act';
+  if (clean.includes('gambling') || clean.includes('jua')) return 'Public Gambling Act';
+  if (clean.includes('electric') || clean.includes('bijli')) return 'Electric Energy Theft';
+  if (clean.includes('essential commodities') || clean.includes('ec act')) return 'Essential Commodities Act';
+  if (clean.includes('cyber') || clean.includes('it act')) return 'IT Act / Cyber Crime';
+  if (clean.includes('immoral traffic') || clean.includes('itpa')) return 'Immoral Traffic (ITPA) Act';
+  if (clean.includes('child labour')) return 'Child Labour Act';
+  if (clean.includes('wildlife')) return 'Wildlife Protection Act';
+  if (clean.includes('forgery') || clean.includes('cheating') || clean.includes('420') || clean.includes('318')) return 'Forgery / Cheating (318, 319 BNS)';
+  if (clean.includes('gaban') || clean.includes('cbt') || clean.includes('406') || clean.includes('316')) return 'Aarthik Gaban (316 BNS / CBT)';
+  if (clean.includes('hit-and-run') || clean.includes('accident') || clean.includes('rash driving') || clean.includes('304a') || clean.includes('106 bns')) return 'Hit-and-Run / Rash Driving Fatalities';
+  if (clean.includes('kidnap') || clean.includes('abduction')) return 'Kidnapping / Abduction';
+
+  return name.trim();
+}
+
+/**
  * Dynamic Multi-Crime and Special Laws (SLL) Rule Matcher:
  * Checks whether a case matches a specific crime head.
  * - Prioritizes explicit `crimeHeads` array / `crimeHead` fields.
@@ -1197,29 +1251,49 @@ export function doesCaseMatchCrimeHead(
 ): boolean {
   if (!headName) return false;
   const config = configOverride || getDynamicCrimeHeadsConfig();
-  const target = headName.toLowerCase().trim();
+  const targetCanonical = canonicalizeCrimeHead(headName).toLowerCase().trim();
+  const targetRaw = headName.toLowerCase().trim();
 
   // 1. Direct match on assigned crimeHeads array
   if (Array.isArray(c.crimeHeads) && c.crimeHeads.length > 0) {
-    if (c.crimeHeads.some((h) => h && h.toLowerCase().trim() === target)) {
+    if (
+      c.crimeHeads.some((h) => {
+        if (!h) return false;
+        const hCanon = canonicalizeCrimeHead(h).toLowerCase().trim();
+        const hRaw = h.toLowerCase().trim();
+        return hCanon === targetCanonical || hRaw === targetRaw;
+      })
+    ) {
       return true;
     }
   }
 
   // 2. Direct match on assigned crimeHead field (handles comma/semicolon-separated strings as well)
   if (c.crimeHead && typeof c.crimeHead === 'string' && c.crimeHead.trim()) {
-    if (c.crimeHead.toLowerCase().trim() === target) {
+    const rawHead = c.crimeHead.toLowerCase().trim();
+    const canonHead = canonicalizeCrimeHead(c.crimeHead).toLowerCase().trim();
+    if (canonHead === targetCanonical || rawHead === targetRaw) {
       return true;
     }
-    const parts = c.crimeHead.split(/[,;&]/).map((p) => p.trim().toLowerCase());
-    if (parts.includes(target)) {
+    const parts = c.crimeHead.split(/[,;&]/).map((p) => p.trim());
+    if (
+      parts.some((p) => {
+        const pCanon = canonicalizeCrimeHead(p).toLowerCase().trim();
+        const pRaw = p.toLowerCase().trim();
+        return pCanon === targetCanonical || pRaw === targetRaw;
+      })
+    ) {
       return true;
     }
   }
 
   // 3. Match against detected crime heads for this case
   const allHeads = getCaseCrimeHeads(c, config);
-  return allHeads.some((h) => h.toLowerCase().trim() === target);
+  return allHeads.some((h) => {
+    const hCanon = canonicalizeCrimeHead(h).toLowerCase().trim();
+    const hRaw = h.toLowerCase().trim();
+    return hCanon === targetCanonical || hRaw === targetRaw;
+  });
 }
 
 /**
