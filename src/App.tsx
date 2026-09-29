@@ -30,6 +30,8 @@ import {
   INITIAL_POLICE_STATIONS,
 } from './data/mockData';
 import { getDeadlineInfo, getPSFromRole, matchesCaseFullDatabaseSearch, isCaseChargesheetedOrFinalForm, getAccusedPipelineStats } from './utils/helpers';
+import { doesCaseMatchCrimeHead } from './utils/crimeClassifier';
+import { getSubdivisionForPS, getDistrictForPS, normalizeSubdivisionName } from './utils/jurisdictionHelpers';
 import { Header } from './components/Header';
 import { DashboardStats } from './components/DashboardStats';
 import { FIRFilterBar } from './components/FIRFilterBar';
@@ -100,6 +102,8 @@ const DEFAULT_FILTERS: FilterOptions = {
   designations: [],
   deadlineStatus: 'ALL',
   statuses: [],
+  crimeHeads: [],
+  crimeHeadMatchMode: 'ANY',
   cctnsSyncFilter: 'ALL',
   chargesheetCCTNS: 'ALL',
   caseDiaryCCTNS: 'ALL',
@@ -592,39 +596,27 @@ export default function App() {
   // Active PS is only non-null if user is a PS-level officer
   const activePS = isAdministrator || isDistrictLevel || isSubdivisionLevel ? null : userPS;
 
-  const getSubdivisionForPS = (psName?: string): string => {
-    if (!psName) return 'Tarapur';
-    const found = (policeStations && policeStations.length > 0 ? policeStations : INITIAL_POLICE_STATIONS).find(
-      (p) => p.name.toLowerCase() === psName.toLowerCase()
-    );
-    if (found?.subdivisionName) return found.subdivisionName;
-    const lower = psName.toLowerCase();
-    if (['tarapur', 'asarganj', 'sangrampur', 'harpur'].includes(lower)) return 'Tarapur';
-    if (['munger kotwali', 'kotwali', 'kasim bazar', 'purabsarai', 'mufassil', 'muffasil', 'nayaramnagar', 'safiasarai'].includes(lower)) return 'Munger Sadar';
-    if (['kharagpur', 'shamshabad', 'tetiyabambar', 'gangta'].includes(lower)) return 'Kharagpur';
-    if (['bhagalpur sadar', 'kotwali bhagalpur', 'ishakchak', 'babarganj'].includes(lower)) return 'Bhagalpur Sadar';
-    if (['kahalgaon', 'sanokhar'].includes(lower)) return 'Kahalgaon';
-    return 'Tarapur';
+  const resolveSubdivision = (psName?: string): string => {
+    return getSubdivisionForPS(psName, policeStations);
   };
 
-  const getDistrictForPS = (psName?: string): string => {
-    if (!psName) return 'Munger';
-    const found = (policeStations && policeStations.length > 0 ? policeStations : INITIAL_POLICE_STATIONS).find(
-      (p) => p.name.toLowerCase() === psName.toLowerCase()
-    );
-    if (found?.districtName) return found.districtName;
-    return 'Munger';
+  const resolveDistrict = (psName?: string): string => {
+    return getDistrictForPS(psName, policeStations);
   };
 
   const isRecordInJurisdictionScope = (item: { ps?: string; district?: string; subdivision?: string }) => {
+    const itemPS = item.ps || '';
+    const itemSubdivision = item.subdivision || resolveSubdivision(itemPS);
+    const itemDistrict = item.district || resolveDistrict(itemPS);
+
     if (isAdministrator) {
       if (selectedDistrict && selectedDistrict !== 'ALL') {
-        const itemDistrict = item.district || 'Munger';
         if (itemDistrict.toLowerCase() !== selectedDistrict.toLowerCase()) return false;
       }
       if (selectedSubdivision && selectedSubdivision !== 'ALL') {
-        const itemSubdivision = item.subdivision || getSubdivisionForPS(item.ps);
-        if (itemSubdivision && itemSubdivision.toLowerCase() !== selectedSubdivision.toLowerCase()) {
+        const itemSubNorm = normalizeSubdivisionName(itemSubdivision);
+        const selSubNorm = normalizeSubdivisionName(selectedSubdivision);
+        if (!itemSubNorm || itemSubNorm !== selSubNorm) {
           return false;
         }
       }
@@ -632,11 +624,11 @@ export default function App() {
     }
 
     if (isDistrictLevel) {
-      const itemDistrict = item.district || 'Munger';
       if (itemDistrict.toLowerCase() !== userDistrict.toLowerCase()) return false;
       if (selectedSubdivision && selectedSubdivision !== 'ALL') {
-        const itemSubdivision = item.subdivision || getSubdivisionForPS(item.ps);
-        if (itemSubdivision && itemSubdivision.toLowerCase() !== selectedSubdivision.toLowerCase()) {
+        const itemSubNorm = normalizeSubdivisionName(itemSubdivision);
+        const selSubNorm = normalizeSubdivisionName(selectedSubdivision);
+        if (!itemSubNorm || itemSubNorm !== selSubNorm) {
           return false;
         }
       }
@@ -644,25 +636,36 @@ export default function App() {
     }
 
     if (isSubdivisionLevel) {
-      const itemSubdivision = item.subdivision || getSubdivisionForPS(item.ps);
-      return !itemSubdivision || itemSubdivision.toLowerCase() === userSubdivision.toLowerCase();
+      const itemSubNorm = normalizeSubdivisionName(itemSubdivision);
+      const userSubNorm = normalizeSubdivisionName(userSubdivision);
+      return Boolean(itemSubNorm) && itemSubNorm === userSubNorm;
     }
 
     // Police Station level
-    return !activePS || item.ps === activePS;
+    if (!activePS) return true;
+    const cleanItemPS = itemPS.toLowerCase().trim().replace(/\s+ps$/, '');
+    const cleanActivePS = activePS.toLowerCase().trim().replace(/\s+ps$/, '');
+    return cleanItemPS === cleanActivePS;
   };
 
   const isRecordInUserBaseScope = (item: { ps?: string; district?: string; subdivision?: string }) => {
+    const itemPS = item.ps || '';
+    const itemSubdivision = item.subdivision || resolveSubdivision(itemPS);
+    const itemDistrict = item.district || resolveDistrict(itemPS);
+
     if (isAdministrator) return true;
     if (isDistrictLevel) {
-      const itemDistrict = item.district || getDistrictForPS(item.ps);
       return itemDistrict.toLowerCase() === userDistrict.toLowerCase();
     }
     if (isSubdivisionLevel) {
-      const itemSubdivision = item.subdivision || getSubdivisionForPS(item.ps);
-      return itemSubdivision.toLowerCase() === userSubdivision.toLowerCase();
+      const itemSubNorm = normalizeSubdivisionName(itemSubdivision);
+      const userSubNorm = normalizeSubdivisionName(userSubdivision);
+      return Boolean(itemSubNorm) && itemSubNorm === userSubNorm;
     }
-    return !activePS || item.ps === activePS;
+    if (!activePS) return true;
+    const cleanItemPS = itemPS.toLowerCase().trim().replace(/\s+ps$/, '');
+    const cleanActivePS = activePS.toLowerCase().trim().replace(/\s+ps$/, '');
+    return cleanItemPS === cleanActivePS;
   };
 
   // Permission levels check
@@ -1335,8 +1338,13 @@ export default function App() {
     if (!isRecordInJurisdictionScope(c)) return false;
 
     // Filters
-    if (filters.policeStations && filters.policeStations.length > 0 && !filters.policeStations.includes(c.ps)) {
-      return false;
+    if (filters.policeStations && filters.policeStations.length > 0) {
+      const matchPS = filters.policeStations.some((filterPs) => {
+        const fNorm = filterPs.toLowerCase().trim().replace(/\s+ps$/, '');
+        const cNorm = (c.ps || '').toLowerCase().trim().replace(/\s+ps$/, '');
+        return fNorm === cNorm;
+      });
+      if (!matchPS) return false;
     }
     if (filters.designations && filters.designations.length > 0 && !filters.designations.includes(c.designation)) {
       return false;
@@ -1376,11 +1384,22 @@ export default function App() {
       if (c.punishmentTerm !== filters.punishmentFilter) return false;
     }
 
-    // Crime Head Filter
-    if (filters.crimeHeads && filters.crimeHeads.length > 0) {
-      const caseHeads = c.crimeHeads || (c.crimeHead ? [c.crimeHead] : []);
-      const hasMatch = caseHeads.some((head) => filters.crimeHeads!.includes(head));
-      if (!hasMatch) return false;
+    // Crime Head Filter (Identical standard logic to Dashboard -> Generate Report Pro)
+    const effectiveCrimeHeads = [
+      ...(filters.crimeHeads || []),
+      ...((filters as any).crimeHead && typeof (filters as any).crimeHead === 'string' && (filters as any).crimeHead !== 'ALL'
+        ? [(filters as any).crimeHead]
+        : []),
+    ];
+    if (effectiveCrimeHeads.length > 0) {
+      const matchMode = filters.crimeHeadMatchMode || 'ANY';
+      if (matchMode === 'ALL') {
+        const matchAll = effectiveCrimeHeads.every((head) => doesCaseMatchCrimeHead(c, head));
+        if (!matchAll) return false;
+      } else {
+        const matchAny = effectiveCrimeHeads.some((head) => doesCaseMatchCrimeHead(c, head));
+        if (!matchAny) return false;
+      }
     }
 
     // CCTNS Sync Filter
