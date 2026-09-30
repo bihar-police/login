@@ -794,10 +794,9 @@ export const IOManagement: React.FC<IOManagementProps> = ({
   }, [filteredPoliceStations, isAdministrator, isDistrictLevel, isSubdivisionLevel]);
 
   const statusOptions = [
-    { label: '🟢 Active (Posted)', value: 'ACTIVE' },
-    { label: '🟠 Transferred', value: 'TRANSFERRED' },
+    { label: '🟢 Active', value: 'ACTIVE' },
     { label: '🏖️ On Leave Today', value: 'ON_LEAVE' },
-    { label: '⚠️ Overdue Cases', value: 'OVERDUE_CASES' },
+    { label: '🟠 Transferred', value: 'TRANSFERRED' },
   ];
 
   const caseStatusOptions = [
@@ -862,13 +861,12 @@ export const IOManagement: React.FC<IOManagementProps> = ({
       // 1. Station
       if (selectedStations.length > 0 && !selectedStations.includes(io.ps)) return false;
 
-      // 2. Status
+      // 2. Status (Active, On Leave Today, Transferred)
       if (selectedStatuses.length > 0) {
         const matchesStatus = selectedStatuses.some((statusKey) => {
-          if (statusKey === 'ACTIVE') return ioStatus === 'ACTIVE';
-          if (statusKey === 'TRANSFERRED') return ioStatus === 'TRANSFERRED';
+          if (statusKey === 'ACTIVE') return ioStatus !== 'TRANSFERRED';
           if (statusKey === 'ON_LEAVE') return onLeave;
-          if (statusKey === 'OVERDUE_CASES') return hasOverdue;
+          if (statusKey === 'TRANSFERRED') return ioStatus === 'TRANSFERRED';
           return false;
         });
         if (!matchesStatus) return false;
